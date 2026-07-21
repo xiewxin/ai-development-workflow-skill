@@ -1,6 +1,10 @@
 .DS_Store
 .idea/
 .publication-language-allowlist
+docs/plans/*
+!docs/plans/2026-07-21-ai-development-workflow-skill.md
+docs/specs/*
+!docs/specs/2026-07-21-ai-development-workflow-skill-design.md
 *.tmp
 *.temp
 *.swp
