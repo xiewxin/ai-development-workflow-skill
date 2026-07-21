@@ -2,6 +2,14 @@
 
 這是一個同時支援 Codex 與 Claude Code 的公開 Skill，用可驗證的流程協助完成需求計畫、測試設計、Git Diff 審查與端到端實作。
 
+## 技術與相容性
+
+- Skill 格式：Agent Skills（`SKILL.md`）
+- 支援工具：Codex、Claude Code
+- 文件格式：Markdown、YAML
+- 發布驗證：Bash、Python 3 標準函式庫
+- 版本管理與審查：Git
+
 ## 四種模式
 
 - **需求計畫**：整理目標、邊界、證據、方案、風險與驗收方式。
