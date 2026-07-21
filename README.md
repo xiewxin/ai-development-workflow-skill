@@ -19,7 +19,40 @@
 
 ## 安裝
 
-### Codex
+### 推薦：使用 skills CLI
+
+環境需具備 Node.js 與 `npx`。執行以下命令後，可互動選擇安裝到哪些 AI 工具、目前專案或全域環境，以及使用 symlink 或 copy：
+
+```bash
+npx skills add https://github.com/xiewxin/ai-development-workflow-skill.git \
+  --skill ai-development-workflow
+```
+
+若要直接全域安裝到 Codex 與 Claude Code，可使用非互動命令：
+
+```bash
+npx skills add https://github.com/xiewxin/ai-development-workflow-skill.git \
+  --skill ai-development-workflow \
+  -g -a codex -a claude-code -y
+```
+
+安裝後重新開啟對話，讓工具載入新的 Skill。
+
+### 交給 AI 安裝
+
+可以將以下內容直接交給支援命令執行的 AI 工具：
+
+```text
+請參考 https://github.com/xiewxin/ai-development-workflow-skill#安裝，
+幫我安裝 Skill：ai-development-workflow。
+若我尚未指定，請先依序確認要安裝到哪些 AI 工具，以及安裝到目前專案或全域環境。
+```
+
+代理應先檢查 `npx` 是否可用；確認 AI 工具與安裝範圍後，再以包含 `-a`、必要時的 `-g`，以及 `-y` 的 `npx skills add` 命令完成安裝，不應未經確認直接採用預設值。
+
+### 替代方式
+
+#### Codex 官方安裝器
 
 可使用 Codex 內建的官方 `skill-installer` 從 `xiewxin/ai-development-workflow-skill` 安裝 `skills/ai-development-workflow`：
 
@@ -29,18 +62,18 @@ python3 "${CODEX_HOME:-$HOME/.codex}/skills/.system/skill-installer/scripts/inst
   --path skills/ai-development-workflow
 ```
 
-也可手動複製技能目錄：
+#### 手動複製
+
+在已取得本倉庫內容的根目錄執行。
+
+Codex：
 
 ```bash
 mkdir -p ~/.codex/skills
 cp -R skills/ai-development-workflow ~/.codex/skills/ai-development-workflow
 ```
 
-安裝後於新的 Codex 對話中使用。
-
-### Claude Code
-
-將同一個目錄複製到 Claude Code 的 Skill 路徑：
+Claude Code：
 
 ```bash
 mkdir -p ~/.claude/skills
@@ -58,7 +91,19 @@ cp -R skills/ai-development-workflow ~/.claude/skills/ai-development-workflow
 
 ## 更新
 
-取得最新版本後，先檢視差異，再以新的 `skills/ai-development-workflow` 取代本機同名目錄。更新後重新開啟對話，讓工具載入新版本。
+使用 skills CLI 安裝時，可執行：
+
+```bash
+npx skills update ai-development-workflow
+```
+
+以上命令用於專案級安裝；更新全域安裝時加上 `-g`：
+
+```bash
+npx skills update ai-development-workflow -g
+```
+
+手動安裝時，取得最新版本並檢視差異，再以新的 `skills/ai-development-workflow` 取代本機同名目錄。更新後重新開啟對話，讓工具載入新版本。
 
 ## 發布前驗證
 
