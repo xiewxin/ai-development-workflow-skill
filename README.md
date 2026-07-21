@@ -75,3 +75,7 @@ validator 會掃描工作樹中的已追蹤與未追蹤檔案（排除 `.git`）
 
 - 公開範例僅使用虛構、中立資料；請勿提交真實業務資料、個資、憑證、內部網址或本機路徑。
 - 發布檢查僅為輔助，不能取代人工差異審查與 GitHub Secret Scanning。
+
+## License
+
+本專案採用 [MIT License](LICENSE)。
