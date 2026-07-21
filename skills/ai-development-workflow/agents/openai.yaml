@@ -1,0 +1,4 @@
+interface:
+  display_name: "AI Development Workflow"
+  short_description: "建立需求計畫、測試設計與程式碼差異審查的完整工作流"
+  default_prompt: "使用 $ai-development-workflow 處理目前需求並在每個確認點停下。"

@@ -1,0 +1,39 @@
+diff --git a/src/Controller/OrderController.php b/src/Controller/OrderController.php
+index 1111111..2222222 100644
+--- a/src/Controller/OrderController.php
++++ b/src/Controller/OrderController.php
+@@ -5,10 +5,18 @@ final class OrderController
+ {
+-    public function __construct(private OrderService $orderService)
++    public function __construct(
++        private OrderService $orderService,
++        private DiscountRepository $discountRepository,
++    )
+     {
+     }
+-
++
+     public function create(array $input): array
+     {
++        if (isset($input['discount_code'])) {
++            $discount = $this->discountRepository->findByCode($input['discount_code']);
++            $input['amount'] -= $discount['amount'];
++        }
++
+         return $this->orderService->create($input);
+     }
+ }
+diff --git a/tests/OrderServiceTest.php b/tests/OrderServiceTest.php
+index 3333333..4444444 100644
+--- a/tests/OrderServiceTest.php
++++ b/tests/OrderServiceTest.php
+@@ -6,4 +6,9 @@ final class OrderServiceTest
+     public function testKeepsOriginalAmountWithoutDiscountCode(): void
+     {
+     }
++
++    public function testAppliesDiscount(): void
++    {
++        // 僅驗證正常折扣碼。
++    }
+ }
