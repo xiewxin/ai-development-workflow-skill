@@ -164,6 +164,7 @@
 
 - 依已載入版本履行 Superpowers 強制前置，並將它作為需求級主 Provider。
 - 以本 Skill 的需求計畫、測試設計與審查作橋接，不因 Superpowers 可用就虛構或重建另一套正式 spec。
+- Superpowers 沒有對應正式產物時，橋接映射將本 Skill 設為需求計畫、測試設計與審查產物的唯一可寫所有者，不改變主 Provider。
 - 只讀取目前需求必要的規範與產物，不掃描全部歷史目錄。
 
 ## 情境十二：Spec Kit 活動 feature 完整

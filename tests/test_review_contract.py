@@ -51,6 +51,27 @@ class ReviewContractTest(unittest.TestCase):
         for expected in ("候選", "核准證據", "同步結果"):
             self.assertIn(expected, template)
 
+    def test_cross_repository_rereview_keeps_independent_findings(self) -> None:
+        """跨倉庫修正邊界不同時應獨立編號與複審。"""
+        review = self.read("references/git-diff-review.md")
+        scenarios = (ROOT / "tests" / "scenarios.md").read_text(encoding="utf-8")
+        for expected in (
+            "跨倉庫、跨合同或需獨立修正／驗證／接受風險時分開編號",
+            "使用者直接引用 `REV-*` 時",
+            "明示關聯項",
+            "複審仍需重新盤點完整",
+        ):
+            self.assertIn(expected, review)
+        self.assertIn("`REV-002` 尚未修正時保持「待處理」", scenarios)
+        self.assertIn("不因關聯項關閉而自動關閉", scenarios)
+
+    def test_candidate_change_stops_affected_implementation(self) -> None:
+        """超出核准範圍時應退回草擬並停止受影響實作。"""
+        guide = self.read("references/requirement-plan.md")
+        self.assertIn("計畫狀態退回草擬", guide)
+        self.assertIn("停止受影響實作", guide)
+        self.assertIn("不得先污染正式章節", guide)
+
 
 if __name__ == "__main__":
     unittest.main()
