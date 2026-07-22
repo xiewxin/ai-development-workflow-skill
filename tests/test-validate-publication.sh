@@ -87,6 +87,7 @@ create_valid_repo() {
         '## 測試與驗證' \
         '## 文件改動' \
         '## 待確認事項' \
+        '## 變更紀錄' \
         '## 實作與驗證結果' \
         '## AI 協作紀錄與成效' \
         '### 可驗證貢獻' \
@@ -789,6 +790,12 @@ heading_file="${missing_heading_root}/skills/ai-development-workflow/assets/requ
 sed -i.bak 's/^## 風險$/## 無風險資料/' "${heading_file}"
 rm "${heading_file}.bak"
 expect_fail "需求範本缺少必要章節" "${missing_heading_root}" "範本必填章節"
+
+missing_change_heading_root="$(new_case missing-change-heading)"
+heading_file="${missing_change_heading_root}/skills/ai-development-workflow/assets/requirement-plan-template.md"
+sed -i.bak 's/^## 變更紀錄$/## 無變更資料/' "${heading_file}"
+rm "${heading_file}.bak"
+expect_fail "需求範本缺少變更紀錄" "${missing_change_heading_root}" "範本必填章節"
 
 missing_ai_metric_root="$(new_case missing-ai-metric)"
 metric_file="${missing_ai_metric_root}/skills/ai-development-workflow/assets/requirement-plan-template.md"
