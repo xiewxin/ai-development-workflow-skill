@@ -24,7 +24,7 @@
 | 測試設計 | 測試產物、安定案例 ID、資料策略、自動化與手動邊界 |
 | 實作執行 | 強制前置、是否可分段，以及會寫入的目標 |
 | 程式碼審查 | 審查範圍、輸出形狀、是否可獨立使用 |
-| 驗證／收旂 | 完成前必要檢查、結果所有者與失敗處理 |
+| 驗證／收斂 | 完成前必要檢查、結果所有者與失敗處理 |
 | 文件回填 | 需更新的正式產物、時機與可寫所有者 |
 
 每項能力都記錄 Provider 是否提供、是否強制、是否可獨立使用、正式產物、讀寫權與降級路徑。不知道 Provider 是否允許拆出單一能力時，不把它當作次要缺口工具。
@@ -56,7 +56,7 @@
 
 - 適合一般功能、重構與 Bug 修正，可提供方案探索、TDD、分段執行、獨立審查與完成前驗證。
 - 依已載入版本完整履行 brainstorming、test-driven-development、executing-plans 或 subagent-driven-development、requesting-code-review 與 verification-before-completion 等強制前置。
-- 某項能力若不允許獨立使用，不把它拆出作為次要 Provider。Superpowers 審查輸出只是原始證據，最終需收旂為單一 `REV-*` 清單。
+- 某項能力若不允許獨立使用，不把它拆出作為次要 Provider。Superpowers 審查輸出只是原始證據，最終需收斂為單一 `REV-*` 清單。
 
 ### Spec Kit
 

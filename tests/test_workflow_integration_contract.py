@@ -60,7 +60,7 @@ class WorkflowIntegrationContractTest(unittest.TestCase):
             self.assertIn(expected, integration)
 
     def test_review_sources_converge_to_one_rev_list(self) -> None:
-        """多個審查來源應收旂為單一 REV 問題清單。"""
+        """多個審查來源應收斂為單一 REV 問題清單。"""
         review = self.read("references/git-diff-review.md")
         self.assertIn("多來源審查", review)
         self.assertIn("REV-*", review)

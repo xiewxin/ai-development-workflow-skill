@@ -113,6 +113,7 @@ required_files = [
     "references/git-diff-review.md",
     "references/examples.md",
     "references/reference-timing.md",
+    "references/workflow-integration.md",
     "assets/requirement-plan-template.md",
     "assets/test-design-template.md",
     "scripts/measure.py",
@@ -462,10 +463,36 @@ def validate_required_fields(
             add_error(path, rule)
 
 
+def validate_section_fields(
+    path: Path,
+    section_heading: str,
+    fields: list[str],
+    rule: str,
+) -> None:
+    """Require labels in bullets or table headers within one level-two section."""
+    section = markdown_section(path, section_heading)
+    if not section:
+        return
+    labels: list[str] = []
+    for raw_line in section.splitlines():
+        line = raw_line.strip()
+        bullet = re.match(r"^- ([^:：]+)[：:]", line)
+        if bullet:
+            labels.append(bullet.group(1).strip())
+        if line.startswith("|") and line.endswith("|"):
+            cells = [cell.strip() for cell in line.strip("|").split("|")]
+            if cells and not all(re.fullmatch(r":?-{3,}:?", cell) for cell in cells):
+                labels.extend(cells)
+    for expected in fields:
+        if not any(expected in label.split("／") for label in labels):
+            add_error(path, rule)
+
+
 validate_headings(
     skill_root / "assets" / "requirement-plan-template.md",
     [
         "基本資訊",
+        "Provider 橋接",
         "需求來源與目標",
         "範圍與非範圍",
         "現況與證據",
@@ -482,6 +509,18 @@ validate_headings(
         "實作與驗證結果",
         "AI 協作紀錄與成效",
     ],
+)
+validate_section_fields(
+    skill_root / "assets" / "requirement-plan-template.md",
+    "Provider 橋接",
+    [
+        "主 Provider",
+        "產物相對路徑",
+        "唯一可寫所有者",
+        "完整性",
+        "同步結果",
+    ],
+    "Provider 橋接欄位",
 )
 validate_required_fields(
     skill_root / "assets" / "requirement-plan-template.md",
@@ -521,6 +560,7 @@ validate_headings(
     skill_root / "assets" / "test-design-template.md",
     [
         "基本資訊／關聯",
+        "Provider 橋接",
         "範圍與策略",
         "環境與依賴",
         "測試資料策略",
@@ -532,6 +572,18 @@ validate_headings(
         "自動化測試實施結果",
         "偏差與剩餘風險",
     ],
+)
+validate_section_fields(
+    skill_root / "assets" / "test-design-template.md",
+    "Provider 橋接",
+    [
+        "主 Provider",
+        "產物相對路徑",
+        "唯一可寫所有者",
+        "完整性",
+        "同步結果",
+    ],
+    "Provider 橋接欄位",
 )
 
 

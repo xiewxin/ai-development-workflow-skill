@@ -74,6 +74,7 @@ create_valid_repo() {
     printf '%s\n' '# 差異審查' > "${skill_root}/references/git-diff-review.md"
     printf '%s\n' '# 虛構範例' > "${skill_root}/references/examples.md"
     printf '%s\n' '# 參考計時' '' '只保存虛構聚合資料。' > "${skill_root}/references/reference-timing.md"
+    printf '%s\n' '# 外部工作流整合' '' '只保存虛構 Provider 橋接規則。' > "${skill_root}/references/workflow-integration.md"
     printf '%s\n' \
         '#!/usr/bin/env python3' \
         '"""公開驗證用虛構腳本。"""' \
@@ -82,6 +83,11 @@ create_valid_repo() {
     printf '%s\n' \
         '# {{INPUT:需求主題}}' \
         '## 基本資訊／狀態' \
+        '## Provider 橋接' \
+        '- 主 Provider：{{INPUT:Provider 或原生}}' \
+        '| 產物相對路徑 | 完整性 | 唯一可寫所有者 | 同步結果 |' \
+        '| --- | --- | --- | --- |' \
+        '| {{INPUT:相對路徑}} | {{INPUT:完整性}} | {{INPUT:所有者}} | {{INPUT:同步結果}} |' \
         '## 需求來源與目標' \
         '## 範圍與非範圍' \
         '## 現況與證據' \
@@ -125,6 +131,11 @@ create_valid_repo() {
     printf '%s\n' \
         '# {{INPUT:測試設計主題}}' \
         '## 基本資訊／關聯' \
+        '## Provider 橋接' \
+        '- 主 Provider：{{INPUT:Provider 或原生}}' \
+        '| 產物相對路徑 | 完整性 | 唯一可寫所有者 | 同步結果 |' \
+        '| --- | --- | --- | --- |' \
+        '| {{INPUT:相對路徑}} | {{INPUT:完整性}} | {{INPUT:所有者}} | {{INPUT:同步結果}} |' \
         '## 範圍與策略' \
         '## 環境與依賴' \
         '## 測試資料策略' \
@@ -803,6 +814,10 @@ missing_timing_reference_root="$(new_case missing-timing-reference)"
 rm "${missing_timing_reference_root}/skills/ai-development-workflow/references/reference-timing.md"
 expect_fail "缺少參考計時指南" "${missing_timing_reference_root}" "必要結構"
 
+missing_workflow_reference_root="$(new_case missing-workflow-reference)"
+rm "${missing_workflow_reference_root}/skills/ai-development-workflow/references/workflow-integration.md"
+expect_fail "缺少外部工作流整合指南" "${missing_workflow_reference_root}" "必要結構"
+
 missing_measure_script_root="$(new_case missing-measure-script)"
 rm "${missing_measure_script_root}/skills/ai-development-workflow/scripts/measure.py"
 expect_fail "缺少參考計時腳本" "${missing_measure_script_root}" "必要結構"
@@ -865,11 +880,23 @@ sed -i.bak '/^- 需求規模：/d' "${contribution_file}"
 rm "${contribution_file}.bak"
 expect_fail "需求範本缺少 AI 可驗證貢獻欄位" "${missing_ai_contribution_root}" "AI 提效欄位"
 
+missing_requirement_bridge_field_root="$(new_case missing-requirement-bridge-field)"
+bridge_file="${missing_requirement_bridge_field_root}/skills/ai-development-workflow/assets/requirement-plan-template.md"
+sed -i.bak 's/唯一可寫所有者/所有者資訊/' "${bridge_file}"
+rm "${bridge_file}.bak"
+expect_fail "需求範本缺少 Provider 橋接欄位" "${missing_requirement_bridge_field_root}" "Provider 橋接欄位"
+
 missing_test_heading_root="$(new_case missing-test-heading)"
 heading_file="${missing_test_heading_root}/skills/ai-development-workflow/assets/test-design-template.md"
 sed -i.bak 's/^## 回歸$/## 無回歸資料/' "${heading_file}"
 rm "${heading_file}.bak"
 expect_fail "測試範本缺少必要章節" "${missing_test_heading_root}" "範本必填章節"
+
+missing_test_bridge_field_root="$(new_case missing-test-bridge-field)"
+bridge_file="${missing_test_bridge_field_root}/skills/ai-development-workflow/assets/test-design-template.md"
+sed -i.bak 's/同步結果/同步資訊/' "${bridge_file}"
+rm "${bridge_file}.bak"
+expect_fail "測試範本缺少 Provider 橋接欄位" "${missing_test_bridge_field_root}" "Provider 橋接欄位"
 
 pythonless_root="$(new_case pythonless)"
 pythonless_bin="${TEST_ROOT}/pythonless-bin"
