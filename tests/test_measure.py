@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import importlib.util
 import io
 import json
@@ -198,6 +200,129 @@ class MeasureCliTest(unittest.TestCase):
             "DELETE-ACTIVE",
         )[1]
         self.assertEqual("deleted", deleted["state"])
+
+    def test_state_is_private_and_contains_no_project_identity(self) -> None:
+        """狀態檔應限制權限且不保存專案或需求識別。"""
+        code, started, raw = self.run_cli(
+            "start",
+            "--phase",
+            "requirement_plan",
+            "--provider",
+            "session",
+        )
+        self.assertEqual(0, code)
+        self.assertLessEqual(len(raw), 200)
+        measurement_id = str(started["id"])
+        state_file = self.state_dir / f"{measurement_id}.json"
+        serialized = state_file.read_text(encoding="utf-8")
+        self.assertNotIn(str(ROOT), serialized)
+        for forbidden in (
+            '"repo"',
+            '"path"',
+            '"prompt"',
+            '"commit"',
+            '"window"',
+            '"application"',
+        ):
+            self.assertNotIn(forbidden, serialized)
+        if os.name != "nt":
+            self.assertEqual(0o700, self.state_dir.stat().st_mode & 0o777)
+            self.assertEqual(0o600, state_file.stat().st_mode & 0o777)
+
+    def test_state_directory_inside_worktree_is_rejected(self) -> None:
+        """狀態目錄不得直接位於目前 Git 工作樹。"""
+        self.state_dir = ROOT / ".unsafe-measure-state"
+        code, payload, _ = self.run_cli(
+            "start",
+            "--phase",
+            "requirement_plan",
+            "--provider",
+            "session",
+        )
+        self.assertEqual(2, code)
+        self.assertEqual("unsafe_state_dir", payload["code"])
+        self.assertFalse(self.state_dir.exists())
+
+    @unittest.skipIf(os.name == "nt", "Windows symlink 權限由平台另外驗證")
+    def test_symlink_resolving_into_worktree_is_rejected(self) -> None:
+        """symlink 解析後落入工作樹時也應拒絕。"""
+        link = Path(self.temp_dir.name) / "linked-root"
+        link.symlink_to(ROOT, target_is_directory=True)
+        self.state_dir = link / ".unsafe-measure-state"
+        code, payload, _ = self.run_cli(
+            "start",
+            "--phase",
+            "requirement_plan",
+            "--provider",
+            "session",
+        )
+        self.assertEqual(2, code)
+        self.assertEqual("unsafe_state_dir", payload["code"])
+
+    @unittest.skipIf(os.name == "nt", "POSIX mode 不適用 Windows")
+    def test_group_writable_state_directory_is_rejected(self) -> None:
+        """既有狀態目錄不可開放群組或其他使用者寫入。"""
+        self.state_dir.mkdir(mode=0o700)
+        self.state_dir.chmod(0o770)
+        code, payload, _ = self.run_cli(
+            "start",
+            "--phase",
+            "requirement_plan",
+            "--provider",
+            "session",
+        )
+        self.assertEqual(2, code)
+        self.assertEqual("unsafe_state_dir", payload["code"])
+
+    def test_corrupt_state_is_preserved(self) -> None:
+        """損壞狀態應停止計量且保留原始證據。"""
+        measurement_id = self.start()
+        state_file = self.state_dir / f"{measurement_id}.json"
+        corrupt = "{invalid-json"
+        state_file.write_text(corrupt, encoding="utf-8")
+        code, payload, _ = self.run_cli("status", "--id", measurement_id)
+        self.assertEqual(2, code)
+        self.assertEqual("state_corrupt", payload["code"])
+        self.assertEqual(corrupt, state_file.read_text(encoding="utf-8"))
+
+    def test_clock_reversal_does_not_modify_state(self) -> None:
+        """系統時間倒退時應拒絕更新並保留狀態。"""
+        measurement_id = self.start()
+        state_file = self.state_dir / f"{measurement_id}.json"
+        before = state_file.read_bytes()
+        self.clock.value -= 1
+        code, payload, _ = self.run_cli("pause", "--id", measurement_id)
+        self.assertEqual(2, code)
+        self.assertEqual("clock_reversed", payload["code"])
+        self.assertEqual(before, state_file.read_bytes())
+
+    def test_lock_conflict_does_not_modify_state(self) -> None:
+        """同一 ID 同時更新時只有持鎖程序可寫入。"""
+        measurement_id = self.start()
+        state_file = self.state_dir / f"{measurement_id}.json"
+        before = state_file.read_bytes()
+        lock_file = self.state_dir / f"{measurement_id}.lock"
+        with self.measure.FileLock(lock_file):
+            code, payload, _ = self.run_cli("pause", "--id", measurement_id)
+        self.assertEqual(2, code)
+        self.assertEqual("state_locked", payload["code"])
+        self.assertEqual(before, state_file.read_bytes())
+
+    def test_atomic_replace_failure_preserves_previous_state(self) -> None:
+        """原子取代失敗時應保留原檔並轉為安全錯誤。"""
+        measurement_id = self.start()
+        state_file = self.state_dir / f"{measurement_id}.json"
+        before = state_file.read_bytes()
+        state = self.measure.read_state(state_file)
+        caught: Exception | None = None
+        with patch.object(self.measure.os, "replace", side_effect=OSError("replace failed")):
+            try:
+                self.measure.write_state(state_file, state)
+            except Exception as error:  # noqa: BLE001 - 測試需驗證公開錯誤類型
+                caught = error
+        self.assertIsInstance(caught, self.measure.MeasureError)
+        self.assertEqual("state_write_failed", caught.code)
+        self.assertEqual(before, state_file.read_bytes())
 
 
 if __name__ == "__main__":
