@@ -93,7 +93,7 @@ python3 scripts/measure.py delete --id 0123456789abcdef0123456789abcdef
 - 狀態只包含隨機 ID、Provider、階段、UTC epoch、閉合區間、PERT 數值與指紋、異常碼、可信度及 completed 聚合摘要。
 - 不保存需求、提示、程式碼、檔名、倉庫名、本機路徑、視窗標題、應用程式名或 ActivityWatch 原始事件。
 - 狀態位於使用者本機狀態目錄，不寫入 Git 工作樹、不提交、不上傳；各 ID 以獨立排他鎖與原子取代保護，鎖檔建立與清理再由不含 ID 的短時存續鎖協調。
-- 不建立個人 CSV、背景清理、雲端分析或跨需求索引。
+- 不建立背景清理、雲端分析或跨需求索引。
 
 ## ActivityWatch 可選升級
 
