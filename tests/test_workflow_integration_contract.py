@@ -1,0 +1,71 @@
+from pathlib import Path
+import unittest
+
+
+ROOT = Path(__file__).resolve().parents[1]
+SKILL_ROOT = ROOT / "skills" / "ai-development-workflow"
+
+
+class WorkflowIntegrationContractTest(unittest.TestCase):
+    """驗證外部工作流能力適配與橋接合同。"""
+
+    def read(self, relative: str) -> str:
+        """讀取 Skill 內指定的 UTF-8 文件。"""
+        return (SKILL_ROOT / relative).read_text(encoding="utf-8")
+
+    def test_provider_reference_defines_selection_and_fallback(self) -> None:
+        """Provider reference 應完整定義選擇、所有權與降級。"""
+        integration = self.read("references/workflow-integration.md")
+        for expected in (
+            "## 能力合同",
+            "## 主 Provider 選擇",
+            "## 多倉庫所有權",
+            "## Provider Profile",
+            "## 命令安全與授權",
+            "## 降級規則",
+            "Superpowers",
+            "Spec Kit",
+            "OpenSpec",
+            "BMAD",
+            "未知工作流",
+            "可選 Provider",
+            "強制 Provider",
+        ):
+            self.assertIn(expected, integration)
+
+    def test_bridge_schema_is_present_in_both_templates(self) -> None:
+        """需求與測試範本應共用最小 Provider 橋接欄位。"""
+        requirement = self.read("assets/requirement-plan-template.md")
+        test_design = self.read("assets/test-design-template.md")
+        for text in (requirement, test_design):
+            self.assertIn("Provider 橋接", text)
+            for expected in (
+                "主 Provider",
+                "產物相對路徑",
+                "唯一可寫所有者",
+                "完整性",
+                "同步結果",
+            ):
+                self.assertIn(expected, text)
+
+    def test_integration_forbids_implicit_mutating_commands(self) -> None:
+        """整合不得隱式執行具外部副作用的命令。"""
+        integration = self.read("references/workflow-integration.md")
+        for expected in (
+            "不自動安裝",
+            "不自動初始化",
+            "不自動封存",
+            "不自動發布",
+        ):
+            self.assertIn(expected, integration)
+
+    def test_review_sources_converge_to_one_rev_list(self) -> None:
+        """多個審查來源應收旂為單一 REV 問題清單。"""
+        review = self.read("references/git-diff-review.md")
+        self.assertIn("多來源審查", review)
+        self.assertIn("REV-*", review)
+        self.assertIn("去重", review)
+
+
+if __name__ == "__main__":
+    unittest.main()
