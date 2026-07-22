@@ -69,9 +69,11 @@ class WorkflowIntegrationContractTest(unittest.TestCase):
     def test_main_provider_and_content_owner_are_distinct_roles(self) -> None:
         """主 Provider 沒有正式產物時應指定能力級內容所有者。"""
         integration = self.read("references/workflow-integration.md")
+        requirement = self.read("references/requirement-plan.md")
         self.assertIn("主 Provider 不等於每個產物的內容所有者", integration)
         self.assertIn("本 Skill 成為該能力的唯一可寫所有者", integration)
         self.assertIn("不改變需求級主 Provider", integration)
+        self.assertIn("只對有明確正式產物的能力擁有內容", requirement)
 
     def test_unknown_provider_has_explicit_write_boundary(self) -> None:
         """未知 Provider 所有權不明時不得猜測寫入。"""
