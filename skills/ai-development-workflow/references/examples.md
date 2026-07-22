@@ -59,7 +59,8 @@
 
 ## 有問題的審查範例
 
-### [P1][功能正確性／分層] 過期折扣碼可能仍被套用
+### [REV-001][高][功能正確性／分層] 過期折扣碼可能仍被套用
+- 狀態：待處理
 - 位置：`src/Controller/OrderController.php:48`
 - 影響：`OrderController` 直接呼叫 `DiscountRepository`，略過 `PromotionService` 的有效期檢查，過期碼可能降低訂單金額。
 - 觸發：使用已過期但仍存在的折扣碼結帳時，Repository 查詢仍會回傳紀錄，現有測試未覆蓋此條件。
