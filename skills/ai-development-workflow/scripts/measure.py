@@ -109,13 +109,23 @@ class FileLock:
 
     def __enter__(self) -> "FileLock":
         """取得排他鎖，衝突時不等待。"""
-        self.path.touch(mode=0o600, exist_ok=True)
-        if os.name != "nt":
-            os.chmod(self.path, 0o600)
-        self.handle = self.path.open("r+b")
-        if self.path.stat().st_size == 0:
-            self.handle.write(b"0")
-            self.handle.flush()
+        try:
+            if self.path.is_symlink():
+                raise MeasureError("unsafe_state_lock", "計量鎖檔不得是符號連結")
+            self.path.touch(mode=0o600, exist_ok=True)
+            if os.name != "nt":
+                os.chmod(self.path, 0o600)
+            self.handle = self.path.open("r+b")
+            if self.path.stat().st_size == 0:
+                self.handle.write(b"0")
+                self.handle.flush()
+        except MeasureError:
+            raise
+        except OSError as error:
+            if self.handle is not None:
+                self.handle.close()
+                self.handle = None
+            raise MeasureError("state_lock_failed", "計量狀態鎖無法使用") from error
         try:
             if os.name == "nt":
                 import msvcrt
@@ -262,20 +272,22 @@ def state_path(state_dir: Path, measurement_id: str) -> Path:
 
 
 def lock_path(state_dir: Path, measurement_id: str) -> Path:
-    """取得已驗證 ID 的鎖檔路徑。"""
-    return state_dir / f"{validate_id(measurement_id)}.lock"
+    """取得不含計量 ID 的共用排他鎖路徑。"""
+    validate_id(measurement_id)
+    return state_dir / ".measure.lock"
 
 
 def read_state(path: Path) -> dict[str, Any]:
     """讀取狀態並拒絕損壞或版本不符的內容。"""
+    if path.is_symlink():
+        raise MeasureError("state_corrupt", "計量狀態不得是符號連結，已保留原檔")
     if not path.is_file():
         raise MeasureError("state_not_found", "找不到指定計量狀態")
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
         raise MeasureError("state_corrupt", "計量狀態損壞，已保留原檔") from error
-    if not isinstance(payload, dict) or payload.get("version") != SCHEMA_VERSION:
-        raise MeasureError("state_corrupt", "計量狀態版本或結構無效，已保留原檔")
+    validate_state(payload, path.stem)
     return payload
 
 
@@ -331,6 +343,213 @@ def validate_intervals(intervals: list[dict[str, Any]]) -> None:
         if previous_end is not None and start < previous_end:
             raise MeasureError("state_corrupt", "計量區間不得重疊")
         previous_end = end
+
+
+def corrupt_state(message: str = "計量狀態結構無效，已保留原檔") -> None:
+    """以穩定錯誤碼拒絕不可信的狀態內容。"""
+    raise MeasureError("state_corrupt", message)
+
+
+def has_exact_keys(value: Any, expected: set[str]) -> bool:
+    """檢查對象是否只含預期欄位。"""
+    return isinstance(value, dict) and set(value) == expected
+
+
+def is_finite_number(value: Any) -> bool:
+    """檢查值是有限數字且不是布林值。"""
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(float(value))
+    )
+
+
+def is_nonnegative_integer(value: Any) -> bool:
+    """檢查值是非負整數且不是布林值。"""
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
+def validate_anomalies(value: Any) -> None:
+    """驗證異常碼只來自本工具的固定集合。"""
+    allowed = {
+        "open_interval_excluded",
+        "activitywatch_fallback",
+        "baseline_fingerprint_mismatch",
+        "mixed_work_yes",
+        "mixed_work_unknown",
+    }
+    if (
+        not isinstance(value, list)
+        or any(not isinstance(item, str) or item not in allowed for item in value)
+        or len(value) != len(set(value))
+    ):
+        corrupt_state()
+
+
+def validate_phase_seconds(value: Any) -> None:
+    """驗證五個固定階段的非負整數秒數。"""
+    if not isinstance(value, dict) or set(value) != set(PHASES):
+        corrupt_state()
+    if any(not is_nonnegative_integer(value[phase]) for phase in PHASES):
+        corrupt_state()
+
+
+def validate_estimates(value: Any) -> dict[str, list[int]]:
+    """驗證狀態內的五階段 PERT 結構。"""
+    if not isinstance(value, dict) or set(value) != set(PHASES):
+        corrupt_state()
+    normalized: dict[str, list[int]] = {}
+    for phase in PHASES:
+        numbers = value[phase]
+        if (
+            not isinstance(numbers, list)
+            or len(numbers) != 3
+            or any(not is_nonnegative_integer(number) for number in numbers)
+            or not numbers[0] <= numbers[1] <= numbers[2]
+        ):
+            corrupt_state()
+        normalized[phase] = numbers
+    return normalized
+
+
+def validate_baseline(value: Any) -> None:
+    """驗證 PERT 基準以及所有可重算的衍生值。"""
+    if value is None:
+        return
+    if not has_exact_keys(
+        value,
+        {"estimates", "phase_seconds", "seconds", "locked_at", "fingerprint"},
+    ):
+        corrupt_state()
+    estimates = validate_estimates(value["estimates"])
+    validate_phase_seconds(value["phase_seconds"])
+    calculated_phases = expected_phase_seconds(estimates)
+    if value["phase_seconds"] != calculated_phases:
+        corrupt_state("計量基準衍生值無效，已保留原檔")
+    if (
+        not is_nonnegative_integer(value["seconds"])
+        or value["seconds"] <= 0
+        or value["seconds"] != sum(calculated_phases.values())
+        or not is_finite_number(value["locked_at"])
+        or not isinstance(value["fingerprint"], str)
+    ):
+        corrupt_state("計量基準衍生值無效，已保留原檔")
+
+
+def validate_completed_summary(value: Any, state: dict[str, Any]) -> None:
+    """驗證已封存摘要不含額外欄位且可重現。"""
+    base_keys = {
+        "id",
+        "state",
+        "source",
+        "seconds",
+        "phases",
+        "confidence",
+        "anomalies",
+        "mixed_work",
+    }
+    efficiency_keys = {
+        "baseline_seconds",
+        "baseline_fingerprint",
+        "saved_seconds",
+        "efficiency_percent",
+    }
+    if not isinstance(value, dict) or set(value) not in (base_keys, base_keys | efficiency_keys):
+        corrupt_state()
+    validate_phase_seconds(value["phases"])
+    validate_anomalies(value["anomalies"])
+    if (
+        value["id"] != state["id"]
+        or value["state"] != "completed"
+        or value["source"] not in ("session", "activitywatch")
+        or not is_nonnegative_integer(value["seconds"])
+        or value["seconds"] != sum(value["phases"].values())
+        or value["confidence"] not in ("medium", "low")
+        or value["confidence"] != state["confidence"]
+        or value["anomalies"] != state["anomalies"]
+        or value["mixed_work"] not in ("no", "yes", "unknown")
+    ):
+        corrupt_state()
+    if set(value) == base_keys:
+        return
+    baseline = state["baseline"]
+    if not isinstance(baseline, dict):
+        corrupt_state()
+    if (
+        not is_nonnegative_integer(value["baseline_seconds"])
+        or value["baseline_seconds"] <= 0
+        or value["baseline_seconds"] != baseline["seconds"]
+        or value["baseline_fingerprint"] != baseline["fingerprint"]
+        or not isinstance(value["saved_seconds"], int)
+        or isinstance(value["saved_seconds"], bool)
+        or not is_finite_number(value["efficiency_percent"])
+    ):
+        corrupt_state()
+    saved_seconds = value["baseline_seconds"] - value["seconds"]
+    expected_efficiency = round(saved_seconds / value["baseline_seconds"] * 100, 2)
+    if (
+        value["saved_seconds"] != saved_seconds
+        or float(value["efficiency_percent"]) != expected_efficiency
+    ):
+        corrupt_state()
+
+
+def validate_state(value: Any, expected_id: str) -> None:
+    """完整驗證狀態 schema、關聯與隱私邊界。"""
+    required_keys = {
+        "version",
+        "id",
+        "provider",
+        "state",
+        "phase",
+        "open",
+        "intervals",
+        "baseline",
+        "anomalies",
+        "confidence",
+        "completed_summary",
+    }
+    if not has_exact_keys(value, required_keys):
+        corrupt_state()
+    if (
+        not isinstance(value["version"], int)
+        or isinstance(value["version"], bool)
+        or value["version"] != SCHEMA_VERSION
+        or not isinstance(value["id"], str)
+        or value["id"] != expected_id
+        or ID_PATTERN.fullmatch(value["id"]) is None
+        or value["provider"] not in ("session", "activitywatch")
+        or value["state"] not in ("running", "paused", "completed")
+        or value["phase"] not in PHASES
+        or value["confidence"] not in ("medium", "low")
+        or not isinstance(value["intervals"], list)
+    ):
+        corrupt_state()
+    for interval in value["intervals"]:
+        if (
+            not has_exact_keys(interval, {"phase", "start", "end"})
+            or interval["phase"] not in PHASES
+            or not is_finite_number(interval["start"])
+            or not is_finite_number(interval["end"])
+        ):
+            corrupt_state()
+    validate_intervals(value["intervals"])
+    validate_anomalies(value["anomalies"])
+    validate_baseline(value["baseline"])
+    opened = value["open"]
+    if value["state"] == "running":
+        if (
+            not has_exact_keys(opened, {"phase", "start"})
+            or opened["phase"] != value["phase"]
+            or not is_finite_number(opened["start"])
+        ):
+            corrupt_state()
+    elif opened is not None:
+        corrupt_state()
+    if value["state"] == "completed":
+        validate_completed_summary(value["completed_summary"], value)
+    elif value["completed_summary"] is not None:
+        corrupt_state()
 
 
 def format_utc(timestamp: float) -> str:

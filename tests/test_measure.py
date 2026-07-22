@@ -196,7 +196,17 @@ class MeasureCliTest(unittest.TestCase):
             "deleted",
             self.run_cli("delete", "--id", measurement_id)[1]["state"],
         )
+        self.assertEqual([], list(self.state_dir.glob(f"{measurement_id}.*")))
         self.assertEqual(2, self.run_cli("status", "--id", measurement_id)[0])
+        self.assertEqual([], list(self.state_dir.glob(f"{measurement_id}.*")))
+
+    def test_missing_status_does_not_create_id_specific_state(self) -> None:
+        """查詢不存在的 ID 不得留下可追蹤的專用檔案。"""
+        measurement_id = "a" * 32
+        code, payload, _ = self.run_cli("status", "--id", measurement_id)
+        self.assertEqual(2, code)
+        self.assertEqual("state_not_found", payload["code"])
+        self.assertEqual([], list(self.state_dir.glob(f"{measurement_id}.*")))
 
     def test_parser_has_no_cross_conversation_discovery_commands(self) -> None:
         """命令面不得提供跨對話搜尋或解析能力。"""
@@ -377,6 +387,20 @@ class MeasureCliTest(unittest.TestCase):
         self.assertEqual("state_corrupt", payload["code"])
         self.assertEqual(corrupt, state_file.read_text(encoding="utf-8"))
 
+    def test_structurally_corrupt_state_returns_safe_json(self) -> None:
+        """結構缺欄的 JSON 應回傳精簡錯誤並保留原檔。"""
+        measurement_id = self.start()
+        state_file = self.state_dir / f"{measurement_id}.json"
+        state = self.measure.read_state(state_file)
+        del state["state"]
+        self.measure.write_state(state_file, state)
+        before = state_file.read_bytes()
+        code, payload, raw = self.run_cli("status", "--id", measurement_id)
+        self.assertEqual(2, code)
+        self.assertEqual("state_corrupt", payload["code"])
+        self.assertLessEqual(len(raw), 200)
+        self.assertEqual(before, state_file.read_bytes())
+
     def test_clock_reversal_does_not_modify_state(self) -> None:
         """系統時間倒退時應拒絕更新並保留狀態。"""
         measurement_id = self.start()
@@ -393,7 +417,7 @@ class MeasureCliTest(unittest.TestCase):
         measurement_id = self.start()
         state_file = self.state_dir / f"{measurement_id}.json"
         before = state_file.read_bytes()
-        lock_file = self.state_dir / f"{measurement_id}.lock"
+        lock_file = self.measure.lock_path(self.state_dir, measurement_id)
         with self.measure.FileLock(lock_file):
             code, payload, _ = self.run_cli("pause", "--id", measurement_id)
         self.assertEqual(2, code)
@@ -618,6 +642,28 @@ class MeasureCliTest(unittest.TestCase):
         self.assertNotIn("efficiency_percent", completed)
         self.assertEqual("low", completed["confidence"])
         self.assertIn("baseline_fingerprint_mismatch", completed["anomalies"])
+
+    def test_derived_baseline_tampering_is_rejected(self) -> None:
+        """指紋未覆蓋的衍生基準值不得影響提效結果。"""
+        measurement_id = self.start()
+        self.lock_baseline(measurement_id)
+        self.run_cli("pause", "--id", measurement_id)
+        state_file = self.state_dir / f"{measurement_id}.json"
+        state = self.measure.read_state(state_file)
+        state["baseline"]["seconds"] = 10_000
+        self.measure.write_state(state_file, state)
+        before = state_file.read_bytes()
+        code, payload, _ = self.run_cli(
+            "complete",
+            "--id",
+            measurement_id,
+            "--mixed-work",
+            "no",
+        )
+        self.assertEqual(2, code)
+        self.assertEqual("state_corrupt", payload["code"])
+        self.assertNotIn("efficiency_percent", payload)
+        self.assertEqual(before, state_file.read_bytes())
 
     def test_complete_is_idempotent_before_delete(self) -> None:
         """刪除前重複 complete 應回傳相同封存摘要。"""
