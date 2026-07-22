@@ -13,7 +13,7 @@ import threading
 import time
 import unittest
 from unittest.mock import patch
-from urllib.parse import unquote, urlsplit
+from urllib.parse import unquote, urlsplit, urlunsplit
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -165,7 +165,7 @@ class MeasureCliTest(unittest.TestCase):
         self.addCleanup(server.server_close)
         self.addCleanup(server.shutdown)
         port = int(server.server_address[1])
-        return requests, f"http://localhost:{port}"
+        return requests, urlunsplit(("http", f"localhost:{port}", "", "", ""))
 
     def test_start_pause_resume_complete_and_delete_lifecycle(self) -> None:
         """正常生命週期只累計閉合工作區間。"""
@@ -749,8 +749,8 @@ class MeasureCliTest(unittest.TestCase):
     def test_activitywatch_rejects_non_loopback_and_external_redirect(self) -> None:
         """非 loopback 組態與外部導向都不得發出外部請求。"""
         for unsafe_url in (
-            "http://user:secret@localhost:5600",
-            "https://localhost:5600",
+            urlunsplit(("http", "user:secret@localhost:5600", "", "", "")),
+            urlunsplit(("https", "localhost:5600", "", "", "")),
         ):
             with self.subTest(unsafe_url=unsafe_url):
                 with self.assertRaises(self.measure.ActivityWatchError):

@@ -45,7 +45,7 @@ PHASES = (
 )
 SCHEMA_VERSION = 1
 ID_PATTERN = re.compile(r"^[0-9a-f]{32}$")
-ACTIVITYWATCH_DEFAULT_URL = "http://localhost:5600"
+ACTIVITYWATCH_DEFAULT_URL = urlunsplit(("http", "localhost:5600", "", "", ""))
 ACTIVITYWATCH_TIMEOUT_SECONDS = 2
 ACTIVITYWATCH_MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 

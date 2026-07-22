@@ -112,8 +112,10 @@ required_files = [
     "references/test-design.md",
     "references/git-diff-review.md",
     "references/examples.md",
+    "references/reference-timing.md",
     "assets/requirement-plan-template.md",
     "assets/test-design-template.md",
+    "scripts/measure.py",
 ]
 for required in required_files:
     candidate = skill_root / required
@@ -494,16 +496,27 @@ validate_required_fields(
         "產出與驗證",
         "提前發現與避免返工",
         "人工決策與介入",
-        "人工基準工時",
-        "實際人工投入",
-        "比較前提",
-        "節省工時",
-        "AI 協作工時節省率",
+        "計量 ID",
+        "計量模式與資料來源",
+        "階段級 PERT",
+        "人工參考基準與鎖定時間",
+        "基準指紋",
+        "AI 協作參考耗時",
+        "階段摘要",
+        "參考節省工時",
+        "參考提效比例",
+        "可信度",
+        "異常與混入工作",
         "歸因限制",
-        "計算口徑",
+        "狀態清理結果",
     ],
     "AI 提效欄位",
 )
+requirement_template = skill_root / "assets" / "requirement-plan-template.md"
+if requirement_template.is_file() and not requirement_template.is_symlink():
+    template_text = markdown_without_fenced_code(read_text(requirement_template))
+    if "../references/reference-timing.md" not in template_text:
+        add_error(requirement_template, "參考計時連結")
 validate_headings(
     skill_root / "assets" / "test-design-template.md",
     [
