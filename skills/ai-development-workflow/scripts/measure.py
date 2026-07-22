@@ -5,17 +5,23 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Callable, Sequence
+from datetime import datetime, timezone
 import hashlib
+import ipaddress
 import json
 import math
 import os
 from pathlib import Path
 import re
+import socket
 import subprocess
 import sys
 import tempfile
 import time
 from typing import Any, BinaryIO, TextIO
+from urllib.error import HTTPError, URLError
+from urllib.parse import quote, urlencode, urlsplit, urlunsplit
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 import uuid
 
 
@@ -39,6 +45,9 @@ PHASES = (
 )
 SCHEMA_VERSION = 1
 ID_PATTERN = re.compile(r"^[0-9a-f]{32}$")
+ACTIVITYWATCH_DEFAULT_URL = "http://localhost:5600"
+ACTIVITYWATCH_TIMEOUT_SECONDS = 2
+ACTIVITYWATCH_MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 
 
 class MeasureError(Exception):
@@ -49,6 +58,37 @@ class MeasureError(Exception):
         super().__init__(message)
         self.code = code
         self.message = message
+
+
+class ActivityWatchError(Exception):
+    """表示 ActivityWatch 無法安全提供可用聚合。"""
+
+
+class LoopbackRedirectHandler(HTTPRedirectHandler):
+    """只允許 ActivityWatch 請求導向另一個 loopback HTTP 位址。"""
+
+    def redirect_request(
+        self,
+        request: Request,
+        file_pointer: Any,
+        code: int,
+        message: str,
+        headers: Any,
+        new_url: str,
+    ) -> Request | None:
+        """導向前先驗證新位址，阻擋外部主機。"""
+        try:
+            validate_activitywatch_base_url(new_url)
+        except ActivityWatchError as error:
+            raise URLError("ActivityWatch redirect rejected") from error
+        return super().redirect_request(
+            request,
+            file_pointer,
+            code,
+            message,
+            headers,
+            new_url,
+        )
 
 
 class SafeArgumentParser(argparse.ArgumentParser):
@@ -293,6 +333,175 @@ def validate_intervals(intervals: list[dict[str, Any]]) -> None:
         previous_end = end
 
 
+def format_utc(timestamp: float) -> str:
+    """將 epoch 秒數轉為 ActivityWatch 可用的 UTC 時間。"""
+    return datetime.fromtimestamp(timestamp, timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def parse_utc(value: str) -> float:
+    """解析 ActivityWatch UTC 時間。"""
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except (TypeError, ValueError) as error:
+        raise ActivityWatchError("ActivityWatch 事件時間無效") from error
+    if parsed.tzinfo is None:
+        raise ActivityWatchError("ActivityWatch 事件缺少時區")
+    return parsed.timestamp()
+
+
+def validate_activitywatch_base_url(value: str) -> str:
+    """驗證並正規化只指向 loopback 的 HTTP 位址。"""
+    try:
+        parsed = urlsplit(value)
+        port = parsed.port or 5600
+    except ValueError as error:
+        raise ActivityWatchError("ActivityWatch 位址無效") from error
+    if (
+        parsed.scheme != "http"
+        or not parsed.hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.query
+        or parsed.fragment
+        or parsed.path not in ("", "/")
+    ):
+        raise ActivityWatchError("ActivityWatch 只允許 loopback HTTP 位址")
+    try:
+        addresses = {
+            info[4][0]
+            for info in socket.getaddrinfo(parsed.hostname, port, type=socket.SOCK_STREAM)
+        }
+        if not addresses or not all(ipaddress.ip_address(address).is_loopback for address in addresses):
+            raise ActivityWatchError("ActivityWatch 主機不是 loopback")
+    except (OSError, ValueError) as error:
+        raise ActivityWatchError("ActivityWatch loopback 位址無法驗證") from error
+    hostname = parsed.hostname
+    host = f"[{hostname}]" if ":" in hostname else hostname
+    return urlunsplit(("http", f"{host}:{port}", "", "", ""))
+
+
+def fetch_activitywatch_json(url: str) -> Any:
+    """以固定逾時與唯讀 GET 讀取本機 ActivityWatch JSON。"""
+    try:
+        request = Request(url, method="GET")
+        with build_opener(LoopbackRedirectHandler()).open(
+            request,
+            timeout=ACTIVITYWATCH_TIMEOUT_SECONDS,
+        ) as response:
+            final_url = response.geturl()
+            validate_activitywatch_base_url(
+                urlunsplit((*urlsplit(final_url)[:2], "", "", ""))
+            )
+            payload = response.read(ACTIVITYWATCH_MAX_RESPONSE_BYTES + 1)
+        if len(payload) > ACTIVITYWATCH_MAX_RESPONSE_BYTES:
+            raise ActivityWatchError("ActivityWatch 回應過大")
+        return json.loads(payload.decode("utf-8"))
+    except (HTTPError, URLError, TimeoutError, OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ActivityWatchError("ActivityWatch API 不可用") from error
+
+
+def merge_ranges(ranges: list[tuple[float, float]]) -> list[tuple[float, float]]:
+    """合併半開時間區間，避免重複累計。"""
+    merged: list[list[float]] = []
+    for start, end in sorted(ranges):
+        if not math.isfinite(start) or not math.isfinite(end) or end < start:
+            raise ActivityWatchError("ActivityWatch 事件區間無效")
+        if end == start:
+            continue
+        if not merged or start > merged[-1][1]:
+            merged.append([start, end])
+        else:
+            merged[-1][1] = max(merged[-1][1], end)
+    return [(start, end) for start, end in merged]
+
+
+def intersect_seconds(
+    left: list[tuple[float, float]],
+    right: list[tuple[float, float]],
+) -> int:
+    """以雙指標加總兩組已合併區間的交集秒數。"""
+    left_index = 0
+    right_index = 0
+    total = 0.0
+    while left_index < len(left) and right_index < len(right):
+        left_start, left_end = left[left_index]
+        right_start, right_end = right[right_index]
+        total += max(0.0, min(left_end, right_end) - max(left_start, right_start))
+        if left_end <= right_end:
+            left_index += 1
+        else:
+            right_index += 1
+    return round(total)
+
+
+def activitywatch_phase_seconds(
+    intervals: list[dict[str, Any]],
+    configured_url: str,
+) -> dict[str, int]:
+    """讀取 AFK 活躍事件並按階段聚合 session 交集。"""
+    base_url = validate_activitywatch_base_url(configured_url)
+    buckets = fetch_activitywatch_json(f"{base_url}/api/0/buckets/")
+    if not isinstance(buckets, dict):
+        raise ActivityWatchError("ActivityWatch bucket 回應結構無效")
+    hostname = socket.gethostname()
+    candidates = [
+        bucket_id
+        for bucket_id, metadata in buckets.items()
+        if isinstance(bucket_id, str)
+        and isinstance(metadata, dict)
+        and metadata.get("type") == "afkstatus"
+        and metadata.get("client") == "aw-watcher-afk"
+        and metadata.get("hostname") == hostname
+    ]
+    if len(candidates) != 1:
+        raise ActivityWatchError("ActivityWatch AFK bucket 無法唯一確定")
+    session_ranges = merge_ranges(
+        [(float(interval["start"]), float(interval["end"])) for interval in intervals]
+    )
+    if not session_ranges:
+        return {phase: 0 for phase in PHASES}
+    query = urlencode(
+        {
+            "start": format_utc(session_ranges[0][0]),
+            "end": format_utc(session_ranges[-1][1]),
+        }
+    )
+    bucket_id = quote(candidates[0], safe="")
+    events = fetch_activitywatch_json(
+        f"{base_url}/api/0/buckets/{bucket_id}/events?{query}"
+    )
+    if not isinstance(events, list):
+        raise ActivityWatchError("ActivityWatch event 回應結構無效")
+    active_ranges: list[tuple[float, float]] = []
+    for event in events:
+        if not isinstance(event, dict) or not isinstance(event.get("data"), dict):
+            raise ActivityWatchError("ActivityWatch event 結構無效")
+        if event["data"].get("status") != "not-afk":
+            continue
+        try:
+            start = parse_utc(event["timestamp"])
+            duration = float(event["duration"])
+        except (KeyError, TypeError, ValueError) as error:
+            raise ActivityWatchError("ActivityWatch 活躍事件無效") from error
+        if not math.isfinite(duration) or duration < 0:
+            raise ActivityWatchError("ActivityWatch 事件時長無效")
+        active_ranges.append((start, start + duration))
+    active = merge_ranges(active_ranges)
+    return {
+        phase: intersect_seconds(
+            merge_ranges(
+                [
+                    (float(interval["start"]), float(interval["end"]))
+                    for interval in intervals
+                    if interval["phase"] == phase
+                ]
+            ),
+            active,
+        )
+        for phase in PHASES
+    }
+
+
 def parse_estimates(items: list[str]) -> dict[str, list[int]]:
     """解析並驗證五個固定階段的 PERT 秒數。"""
     estimates: dict[str, list[int]] = {}
@@ -514,7 +723,10 @@ def baseline_action(
     return action
 
 
-def complete_action(mixed_work: str) -> Callable[[dict[str, Any]], dict[str, Any]]:
+def complete_action(
+    mixed_work: str,
+    activitywatch_url: str = ACTIVITYWATCH_DEFAULT_URL,
+) -> Callable[[dict[str, Any]], dict[str, Any]]:
     """建立完成封存與聚合摘要。"""
     def action(state: dict[str, Any]) -> dict[str, Any]:
         if state["state"] == "completed":
@@ -535,10 +747,22 @@ def complete_action(mixed_work: str) -> Callable[[dict[str, Any]], dict[str, Any
             )
             for phase in PHASES
         }
+        source = "session"
+        if state["provider"] == "activitywatch":
+            try:
+                by_phase = activitywatch_phase_seconds(
+                    state["intervals"],
+                    activitywatch_url,
+                )
+                source = "activitywatch"
+            except ActivityWatchError:
+                confidence = "low"
+                if "activitywatch_fallback" not in anomalies:
+                    anomalies.append("activitywatch_fallback")
         summary: dict[str, Any] = {
             "id": state["id"],
             "state": "completed",
-            "source": state["provider"],
+            "source": source,
             "seconds": sum(by_phase.values()),
             "phases": by_phase,
             "confidence": confidence,
@@ -654,7 +878,13 @@ def main(
             result = update_measurement(
                 state_dir,
                 arguments.id,
-                complete_action(arguments.mixed_work),
+                complete_action(
+                    arguments.mixed_work,
+                    os.environ.get(
+                        "AI_WORKFLOW_ACTIVITYWATCH_URL",
+                        ACTIVITYWATCH_DEFAULT_URL,
+                    ),
+                ),
             )
         elif arguments.command == "baseline":
             estimates = parse_estimates(arguments.estimate)

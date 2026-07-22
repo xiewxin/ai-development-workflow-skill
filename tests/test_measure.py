@@ -1,14 +1,19 @@
 from __future__ import annotations
 
 import importlib.util
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import io
 import json
 import os
 from pathlib import Path
+import socket
 import sys
 import tempfile
+import threading
+import time
 import unittest
 from unittest.mock import patch
+from urllib.parse import unquote, urlsplit
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -50,6 +55,7 @@ class MeasureCliTest(unittest.TestCase):
         self.state_dir = Path(self.temp_dir.name) / "state"
         self.clock = FakeClock()
         self.measure = load_measure()
+        self.activitywatch_url: str | None = None
 
     def run_cli(self, *arguments: str) -> tuple[int, dict[str, object], bytes]:
         """執行 CLI 並回傳 exit code、JSON 與原始輸出。"""
@@ -58,6 +64,8 @@ class MeasureCliTest(unittest.TestCase):
             "AI_WORKFLOW_STATE_DIR": str(self.state_dir),
             "LOCALAPPDATA": self.temp_dir.name,
         }
+        if self.activitywatch_url is not None:
+            environment["AI_WORKFLOW_ACTIVITYWATCH_URL"] = self.activitywatch_url
         with patch.dict(os.environ, environment, clear=False):
             exit_code = self.measure.main(list(arguments), now=self.clock.now, stdout=output)
         raw = output.getvalue().encode("utf-8")
@@ -100,6 +108,64 @@ class MeasureCliTest(unittest.TestCase):
         )
         self.assertEqual(0, code)
         return payload
+
+    def start_activitywatch_server(
+        self,
+        *,
+        buckets: object,
+        events: object,
+        buckets_status: int = 200,
+        redirect: str | None = None,
+        delay: float = 0,
+    ) -> tuple[list[tuple[str, str]], str]:
+        """啟動只用於測試的 ActivityWatch 假服務。"""
+        requests: list[tuple[str, str]] = []
+
+        class Handler(BaseHTTPRequestHandler):
+            """記錄方法與路徑，並回傳預設的 JSON。"""
+
+            def do_GET(self) -> None:
+                """處理唯讀測試請求。"""
+                requests.append(("GET", self.path))
+                if delay:
+                    time.sleep(delay)
+                if redirect is not None and self.path.startswith("/api/0/buckets/"):
+                    self.send_response(302)
+                    self.send_header("Location", redirect)
+                    self.end_headers()
+                    return
+                if self.path == "/api/0/buckets/":
+                    self.send_json(buckets_status, buckets)
+                    return
+                if self.path.startswith("/api/0/buckets/") and "/events?" in self.path:
+                    self.send_json(200, events)
+                    return
+                self.send_json(404, {"error": "not found"})
+
+            def do_POST(self) -> None:
+                """記錄並拒絕非唯讀請求。"""
+                requests.append(("POST", self.path))
+                self.send_json(405, {"error": "method not allowed"})
+
+            def send_json(self, status: int, payload: object) -> None:
+                """輸出測試 JSON 回應。"""
+                body = json.dumps(payload).encode("utf-8")
+                self.send_response(status)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, format: str, *args: object) -> None:
+                """關閉測試服務的預設日誌。"""
+
+        server = ThreadingHTTPServer(("localhost", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        port = int(server.server_address[1])
+        return requests, f"http://localhost:{port}"
 
     def test_start_pause_resume_complete_and_delete_lifecycle(self) -> None:
         """正常生命週期只累計閉合工作區間。"""
@@ -572,6 +638,178 @@ class MeasureCliTest(unittest.TestCase):
             "unknown",
         )[1]
         self.assertEqual(first, second)
+
+    def test_activitywatch_uses_only_local_afk_gets_and_intersects_intervals(self) -> None:
+        """ActivityWatch 只讀本機 AFK 事件並正確聚合交集。"""
+        started_at = self.clock.value
+        bucket_id = "aw-watcher-afk_test/host"
+        requests, self.activitywatch_url = self.start_activitywatch_server(
+            buckets={
+                bucket_id: {
+                    "id": bucket_id,
+                    "type": "afkstatus",
+                    "client": "aw-watcher-afk",
+                    "hostname": socket.gethostname(),
+                },
+                "aw-watcher-window-test": {
+                    "id": "aw-watcher-window-test",
+                    "type": "currentwindow",
+                    "client": "aw-watcher-window",
+                    "hostname": socket.gethostname(),
+                },
+            },
+            events=[
+                {
+                    "timestamp": self.measure.format_utc(started_at + 10),
+                    "duration": 30,
+                    "data": {"status": "not-afk"},
+                },
+                {
+                    "timestamp": self.measure.format_utc(started_at + 20),
+                    "duration": 30,
+                    "data": {"status": "not-afk"},
+                },
+                {
+                    "timestamp": self.measure.format_utc(started_at + 90),
+                    "duration": 40,
+                    "data": {"status": "not-afk"},
+                },
+                {
+                    "timestamp": self.measure.format_utc(started_at + 50),
+                    "duration": 40,
+                    "data": {"status": "afk"},
+                },
+            ],
+        )
+        measurement_id = self.start(provider="activitywatch")
+        self.clock.advance(100)
+        self.run_cli("enter", "--id", measurement_id, "--phase", "test_design")
+        self.clock.advance(100)
+        self.run_cli("pause", "--id", measurement_id)
+        completed = self.run_cli(
+            "complete",
+            "--id",
+            measurement_id,
+            "--mixed-work",
+            "no",
+        )[1]
+        self.assertEqual("activitywatch", completed["source"])
+        self.assertEqual(80, completed["seconds"])
+        self.assertEqual(50, completed["phases"]["requirement_plan"])
+        self.assertEqual(30, completed["phases"]["test_design"])
+        self.assertTrue(all(method == "GET" for method, _ in requests))
+        self.assertEqual(2, len(requests))
+        event_path = requests[1][1]
+        self.assertIn("/events?", event_path)
+        self.assertIn("%2F", event_path)
+        self.assertNotIn("window", unquote(event_path))
+        parsed = urlsplit(event_path)
+        self.assertIn("start=", parsed.query)
+        self.assertIn("end=", parsed.query)
+
+        state_file = self.state_dir / f"{measurement_id}.json"
+        serialized = state_file.read_text(encoding="utf-8")
+        for forbidden in (bucket_id, "not-afk", '"duration"', '"timestamp"'):
+            self.assertNotIn(forbidden, serialized)
+
+    def test_activitywatch_falls_back_for_ambiguous_bucket_and_server_error(self) -> None:
+        """候選歧義與 API 錯誤都應降級為 session。"""
+        local_metadata = {
+            "type": "afkstatus",
+            "client": "aw-watcher-afk",
+            "hostname": socket.gethostname(),
+        }
+        cases = (
+            ({"first": local_metadata, "second": local_metadata}, 200),
+            ({}, 500),
+        )
+        for buckets, status in cases:
+            with self.subTest(status=status, candidates=len(buckets)):
+                requests, self.activitywatch_url = self.start_activitywatch_server(
+                    buckets=buckets,
+                    events=[],
+                    buckets_status=status,
+                )
+                measurement_id = self.start(provider="activitywatch")
+                self.clock.advance(20)
+                self.run_cli("pause", "--id", measurement_id)
+                completed = self.run_cli(
+                    "complete",
+                    "--id",
+                    measurement_id,
+                    "--mixed-work",
+                    "no",
+                )[1]
+                self.assertEqual("session", completed["source"])
+                self.assertEqual(20, completed["seconds"])
+                self.assertEqual("low", completed["confidence"])
+                self.assertIn("activitywatch_fallback", completed["anomalies"])
+                self.assertEqual([("GET", "/api/0/buckets/")], requests)
+
+    def test_activitywatch_rejects_non_loopback_and_external_redirect(self) -> None:
+        """非 loopback 組態與外部導向都不得發出外部請求。"""
+        for unsafe_url in (
+            "http://user:secret@localhost:5600",
+            "https://localhost:5600",
+        ):
+            with self.subTest(unsafe_url=unsafe_url):
+                with self.assertRaises(self.measure.ActivityWatchError):
+                    self.measure.validate_activitywatch_base_url(unsafe_url)
+        self.activitywatch_url = "https://example.com:5600"
+        measurement_id = self.start(provider="activitywatch")
+        self.clock.advance(5)
+        self.run_cli("pause", "--id", measurement_id)
+        invalid_url_completed = self.run_cli(
+            "complete",
+            "--id",
+            measurement_id,
+            "--mixed-work",
+            "no",
+        )[1]
+        self.assertEqual("session", invalid_url_completed["source"])
+        self.assertIn("activitywatch_fallback", invalid_url_completed["anomalies"])
+
+        requests, self.activitywatch_url = self.start_activitywatch_server(
+            buckets={},
+            events=[],
+            redirect="https://example.com/activitywatch",
+        )
+        measurement_id = self.start(provider="activitywatch")
+        self.clock.advance(5)
+        self.run_cli("pause", "--id", measurement_id)
+        redirected = self.run_cli(
+            "complete",
+            "--id",
+            measurement_id,
+            "--mixed-work",
+            "no",
+        )[1]
+        self.assertEqual("session", redirected["source"])
+        self.assertIn("activitywatch_fallback", redirected["anomalies"])
+        self.assertEqual([("GET", "/api/0/buckets/")], requests)
+
+    def test_activitywatch_timeout_falls_back_without_blocking_workflow(self) -> None:
+        """ActivityWatch 逾時後應降級，不中斷完結流程。"""
+        _, self.activitywatch_url = self.start_activitywatch_server(
+            buckets={},
+            events=[],
+            delay=2.2,
+        )
+        measurement_id = self.start(provider="activitywatch")
+        self.clock.advance(5)
+        self.run_cli("pause", "--id", measurement_id)
+        started = time.monotonic()
+        completed = self.run_cli(
+            "complete",
+            "--id",
+            measurement_id,
+            "--mixed-work",
+            "no",
+        )[1]
+        elapsed = time.monotonic() - started
+        self.assertEqual("session", completed["source"])
+        self.assertIn("activitywatch_fallback", completed["anomalies"])
+        self.assertLess(elapsed, 2.2)
 
 
 if __name__ == "__main__":
