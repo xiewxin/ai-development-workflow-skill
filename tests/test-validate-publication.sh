@@ -88,7 +88,21 @@ create_valid_repo() {
         '## 文件改動' \
         '## 待確認事項' \
         '## 實作與驗證結果' \
-        '## AI 協作成效' \
+        '## AI 協作紀錄與成效' \
+        '### 可驗證貢獻' \
+        '- 需求規模：{{INPUT:規模與範圍依據}}' \
+        '- 協作範圍：{{INPUT:AI 協作階段}}' \
+        '- 產出與驗證：{{INPUT:可重現成果}}' \
+        '- 提前發現與避免返工：{{INPUT:具體問題與影響}}' \
+        '- 人工決策與介入：{{INPUT:需由使用者確認的內容}}' \
+        '### 效率量化' \
+        '- 人工基準工時：{{INPUT:工時、來源與記錄時點}}' \
+        '- 實際人工投入：{{INPUT:工時、涵蓋階段與記錄方式}}' \
+        '- 比較前提：{{INPUT:需求範圍與品質標準是否一致}}' \
+        '- 節省工時：{{INPUT:工時或無法計算}}' \
+        '- AI 協作工時節省率：{{INPUT:百分比或無法計算}}' \
+        '- 歸因限制：{{INPUT:其他可能影響工時的因素}}' \
+        '- 計算口徑：{{INPUT:公式與未計算原因}}' \
         '' \
         '[{{INPUT:文件名稱}}]({{INPUT:相對連結}})' \
         > "${skill_root}/assets/requirement-plan-template.md"
@@ -775,6 +789,24 @@ heading_file="${missing_heading_root}/skills/ai-development-workflow/assets/requ
 sed -i.bak 's/^## 風險$/## 無風險資料/' "${heading_file}"
 rm "${heading_file}.bak"
 expect_fail "需求範本缺少必要章節" "${missing_heading_root}" "範本必填章節"
+
+missing_ai_metric_root="$(new_case missing-ai-metric)"
+metric_file="${missing_ai_metric_root}/skills/ai-development-workflow/assets/requirement-plan-template.md"
+sed -i.bak '/^- 人工基準工時：/d' "${metric_file}"
+rm "${metric_file}.bak"
+printf '%s\n' \
+    '' \
+    '```markdown' \
+    '- 人工基準工時：此內容只是程式碼區塊中的示例。' \
+    '```' \
+    >> "${metric_file}"
+expect_fail "需求範本缺少 AI 提效量化欄位" "${missing_ai_metric_root}" "AI 提效欄位"
+
+missing_ai_contribution_root="$(new_case missing-ai-contribution)"
+contribution_file="${missing_ai_contribution_root}/skills/ai-development-workflow/assets/requirement-plan-template.md"
+sed -i.bak '/^- 需求規模：/d' "${contribution_file}"
+rm "${contribution_file}.bak"
+expect_fail "需求範本缺少 AI 可驗證貢獻欄位" "${missing_ai_contribution_root}" "AI 提效欄位"
 
 missing_test_heading_root="$(new_case missing-test-heading)"
 heading_file="${missing_test_heading_root}/skills/ai-development-workflow/assets/test-design-template.md"

@@ -419,6 +419,47 @@ def validate_headings(path: Path, required: list[str]) -> None:
             add_error(path, "範本必填章節")
 
 
+def markdown_section(path: Path, heading: str) -> str:
+    """Return one level-two Markdown section without including later peers."""
+    if not path.is_file():
+        return ""
+    lines = read_text(path).splitlines()
+    start: int | None = None
+    for index, line in enumerate(lines):
+        if line.strip() == f"## {heading}":
+            start = index + 1
+            break
+    if start is None:
+        return ""
+    end = len(lines)
+    for index in range(start, len(lines)):
+        if re.match(r"^#{1,2}\s+", lines[index]):
+            end = index
+            break
+    return markdown_without_fenced_code("\n".join(lines[start:end]))
+
+
+def validate_required_fields(
+    path: Path,
+    section_heading: str,
+    subsection_headings: list[str],
+    fields: list[str],
+    rule: str,
+) -> None:
+    """Require exact subsection headings and field labels within one section."""
+    section = markdown_section(path, section_heading)
+    if not section:
+        return
+    section_lines = section.splitlines()
+    for expected in subsection_headings:
+        if f"### {expected}" not in section_lines:
+            add_error(path, rule)
+    for expected in fields:
+        pattern = re.compile(rf"^- {re.escape(expected)}：")
+        if not any(pattern.match(line) for line in section_lines):
+            add_error(path, rule)
+
+
 validate_headings(
     skill_root / "assets" / "requirement-plan-template.md",
     [
@@ -436,8 +477,31 @@ validate_headings(
         "文件改動",
         "待確認事項",
         "實作與驗證結果",
-        "AI 協作成效",
+        "AI 協作紀錄與成效",
     ],
+)
+validate_required_fields(
+    skill_root / "assets" / "requirement-plan-template.md",
+    "AI 協作紀錄與成效",
+    [
+        "可驗證貢獻",
+        "效率量化",
+    ],
+    [
+        "需求規模",
+        "協作範圍",
+        "產出與驗證",
+        "提前發現與避免返工",
+        "人工決策與介入",
+        "人工基準工時",
+        "實際人工投入",
+        "比較前提",
+        "節省工時",
+        "AI 協作工時節省率",
+        "歸因限制",
+        "計算口徑",
+    ],
+    "AI 提效欄位",
 )
 validate_headings(
     skill_root / "assets" / "test-design-template.md",
