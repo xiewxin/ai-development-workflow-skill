@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Callable, Sequence
+from contextlib import contextmanager
 from datetime import datetime, timezone
 import hashlib
 import ipaddress
@@ -18,7 +19,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from typing import Any, BinaryIO, TextIO
+from typing import Any, BinaryIO, Iterator, TextIO
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode, urlsplit, urlunsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
@@ -96,15 +97,16 @@ class SafeArgumentParser(argparse.ArgumentParser):
 
     def error(self, message: str) -> None:
         """以穩定錯誤碼回報無效參數。"""
-        raise MeasureError("invalid_arguments", f"命令參數無效：{message}")
+        raise MeasureError("invalid_arguments", "命令參數無效")
 
 
 class FileLock:
     """以標準函式庫提供跨平台非阻塞排他鎖。"""
 
-    def __init__(self, path: Path) -> None:
-        """記錄鎖檔路徑。"""
+    def __init__(self, path: Path, wait_seconds: float = 0) -> None:
+        """記錄鎖檔路徑與有界等待時間。"""
         self.path = path
+        self.wait_seconds = wait_seconds
         self.handle: BinaryIO | None = None
 
     def __enter__(self) -> "FileLock":
@@ -126,20 +128,26 @@ class FileLock:
                 self.handle.close()
                 self.handle = None
             raise MeasureError("state_lock_failed", "計量狀態鎖無法使用") from error
-        try:
-            if os.name == "nt":
-                import msvcrt
+        deadline = time.monotonic() + max(0, self.wait_seconds)
+        while True:
+            try:
+                if os.name == "nt":
+                    import msvcrt
 
-                self.handle.seek(0)
-                msvcrt.locking(self.handle.fileno(), msvcrt.LK_NBLCK, 1)
-            else:
-                import fcntl
+                    self.handle.seek(0)
+                    msvcrt.locking(self.handle.fileno(), msvcrt.LK_NBLCK, 1)
+                else:
+                    import fcntl
 
-                fcntl.flock(self.handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except OSError as error:
-            self.handle.close()
-            self.handle = None
-            raise MeasureError("state_locked", "計量狀態正由其他程序更新") from error
+                    fcntl.flock(self.handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except OSError as error:
+                if time.monotonic() < deadline:
+                    time.sleep(0.01)
+                    continue
+                self.handle.close()
+                self.handle = None
+                raise MeasureError("state_locked", "計量狀態正由其他程序更新") from error
         return self
 
     def __exit__(self, exc_type: object, exc: object, traceback: object) -> None:
@@ -272,9 +280,36 @@ def state_path(state_dir: Path, measurement_id: str) -> Path:
 
 
 def lock_path(state_dir: Path, measurement_id: str) -> Path:
-    """取得不含計量 ID 的共用排他鎖路徑。"""
-    validate_id(measurement_id)
-    return state_dir / ".measure.lock"
+    """取得已驗證 ID 的鎖檔路徑。"""
+    return state_dir / f"{validate_id(measurement_id)}.lock"
+
+
+def registry_lock_path(state_dir: Path) -> Path:
+    """取得不含計量 ID 的短時鎖存續鎖。"""
+    return state_dir / ".measure-registry.lock"
+
+
+@contextmanager
+def measurement_lock(
+    state_dir: Path,
+    measurement_id: str,
+    *,
+    require_state: bool = True,
+) -> Iterator[None]:
+    """安全取得單一 ID 鎖，只在建立鎖時短暫持有存續鎖。"""
+    path = state_path(state_dir, measurement_id)
+    per_id_lock = FileLock(lock_path(state_dir, measurement_id))
+    with FileLock(registry_lock_path(state_dir), wait_seconds=0.25):
+        exists = path.is_file() or path.is_symlink()
+        if require_state and not exists:
+            raise MeasureError("state_not_found", "找不到指定計量狀態")
+        if not require_state and exists:
+            raise MeasureError("state_locked", "計量狀態已存在")
+        per_id_lock.__enter__()
+    try:
+        yield
+    finally:
+        per_id_lock.__exit__(None, None, None)
 
 
 def read_state(path: Path) -> dict[str, Any]:
@@ -458,6 +493,7 @@ def validate_completed_summary(value: Any, state: dict[str, Any]) -> None:
         corrupt_state()
     validate_phase_seconds(value["phases"])
     validate_anomalies(value["anomalies"])
+    anomalies = set(value["anomalies"])
     if (
         value["id"] != state["id"]
         or value["state"] != "completed"
@@ -470,11 +506,47 @@ def validate_completed_summary(value: Any, state: dict[str, Any]) -> None:
         or value["mixed_work"] not in ("no", "yes", "unknown")
     ):
         corrupt_state()
-    if set(value) == base_keys:
-        return
+    expected_mixed_anomaly = (
+        None if value["mixed_work"] == "no" else f"mixed_work_{value['mixed_work']}"
+    )
+    mixed_anomalies = {"mixed_work_yes", "mixed_work_unknown"} & anomalies
+    if (
+        (expected_mixed_anomaly is None and mixed_anomalies)
+        or (
+            expected_mixed_anomaly is not None
+            and mixed_anomalies != {expected_mixed_anomaly}
+        )
+        or value["confidence"] != ("low" if anomalies else "medium")
+    ):
+        corrupt_state()
+    if state["provider"] == "session":
+        if value["source"] != "session" or "activitywatch_fallback" in anomalies:
+            corrupt_state()
+    elif value["source"] == "activitywatch":
+        if "activitywatch_fallback" in anomalies:
+            corrupt_state()
+    elif "activitywatch_fallback" not in anomalies:
+        corrupt_state()
     baseline = state["baseline"]
+    has_efficiency = set(value) == base_keys | efficiency_keys
+    if baseline is None:
+        if has_efficiency or "baseline_fingerprint_mismatch" in anomalies:
+            corrupt_state()
+        return
     if not isinstance(baseline, dict):
         corrupt_state()
+    expected_fingerprint = calculate_baseline_fingerprint(
+        baseline["estimates"],
+        float(baseline["locked_at"]),
+    )
+    fingerprint_matches = expected_fingerprint == baseline["fingerprint"]
+    if fingerprint_matches:
+        if not has_efficiency or "baseline_fingerprint_mismatch" in anomalies:
+            corrupt_state()
+    elif has_efficiency or "baseline_fingerprint_mismatch" not in anomalies:
+        corrupt_state()
+    if not has_efficiency:
+        return
     if (
         not is_nonnegative_integer(value["baseline_seconds"])
         or value["baseline_seconds"] <= 0
@@ -795,7 +867,7 @@ def start_measurement(state_dir: Path, phase: str, provider: str, current_time: 
     """建立新的 running 計量狀態。"""
     measurement_id = uuid.uuid4().hex
     path = state_path(state_dir, measurement_id)
-    with FileLock(lock_path(state_dir, measurement_id)):
+    with measurement_lock(state_dir, measurement_id, require_state=False):
         state = {
             "version": SCHEMA_VERSION,
             "id": measurement_id,
@@ -820,7 +892,7 @@ def update_measurement(
 ) -> dict[str, Any]:
     """在排他鎖內讀取、更新並原子寫入狀態。"""
     path = state_path(state_dir, measurement_id)
-    with FileLock(lock_path(state_dir, measurement_id)):
+    with measurement_lock(state_dir, measurement_id):
         state = read_state(path)
         result = action(state)
         write_state(path, state)
@@ -1029,20 +1101,36 @@ def delete_measurement(
     """刪除已完成或經雙重確認的活動狀態。"""
     path = state_path(state_dir, measurement_id)
     lock = lock_path(state_dir, measurement_id)
-    with FileLock(lock):
-        state = read_state(path)
-        if state["state"] != "completed" and not (
-            allow_active and confirmation == "DELETE-ACTIVE"
-        ):
-            raise MeasureError("confirmation_required", "活動狀態需要雙重確認才能刪除")
-        path.unlink()
+    with FileLock(registry_lock_path(state_dir), wait_seconds=0.25):
+        if not path.is_file() and not path.is_symlink():
+            raise MeasureError("state_not_found", "找不到指定計量狀態")
+        per_id_lock = FileLock(lock)
+        per_id_lock.__enter__()
+        deleted = False
+        try:
+            state = read_state(path)
+            if state["state"] != "completed" and not (
+                allow_active and confirmation == "DELETE-ACTIVE"
+            ):
+                raise MeasureError("confirmation_required", "活動狀態需要雙重確認才能刪除")
+            path.unlink()
+            deleted = True
+        finally:
+            per_id_lock.__exit__(None, None, None)
+        if deleted:
+            try:
+                lock.unlink()
+            except FileNotFoundError:
+                pass
+            except OSError as error:
+                raise MeasureError("state_delete_failed", "計量專用鎖檔清理失敗") from error
     return {"id": measurement_id, "state": "deleted"}
 
 
 def status_measurement(state_dir: Path, measurement_id: str) -> dict[str, Any]:
     """在不修改狀態下回傳精簡摘要。"""
     path = state_path(state_dir, measurement_id)
-    with FileLock(lock_path(state_dir, measurement_id)):
+    with measurement_lock(state_dir, measurement_id):
         return brief_payload(read_state(path))
 
 

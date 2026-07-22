@@ -225,6 +225,20 @@ class MeasureCliTest(unittest.TestCase):
             set(self.measure.COMMANDS),
         )
 
+    def test_invalid_arguments_do_not_echo_input_values(self) -> None:
+        """無效參數錯誤不得回顯使用者輸入。"""
+        private_value = "private_argument_value_1234567890"
+        code, payload, raw = self.run_cli(
+            "status",
+            "--id",
+            "a" * 32,
+            "--unexpected",
+            private_value,
+        )
+        self.assertEqual(2, code)
+        self.assertEqual("invalid_arguments", payload["code"])
+        self.assertNotIn(private_value.encode("utf-8"), raw)
+
     def test_idempotent_transitions_do_not_duplicate_time(self) -> None:
         """重複 pause、resume 與同階段 enter 不得重複累計。"""
         measurement_id = self.start()
@@ -423,6 +437,16 @@ class MeasureCliTest(unittest.TestCase):
         self.assertEqual(2, code)
         self.assertEqual("state_locked", payload["code"])
         self.assertEqual(before, state_file.read_bytes())
+
+    def test_lock_for_one_id_does_not_block_another_id(self) -> None:
+        """不同計量 ID 的狀態更新不得因長作業互相阻塞。"""
+        first_id = self.start()
+        second_id = self.start()
+        first_lock = self.measure.lock_path(self.state_dir, first_id)
+        with self.measure.FileLock(first_lock):
+            code, payload, _ = self.run_cli("pause", "--id", second_id)
+        self.assertEqual(0, code)
+        self.assertEqual("paused", payload["state"])
 
     def test_atomic_replace_failure_preserves_previous_state(self) -> None:
         """原子取代失敗時應保留原檔並轉為安全錯誤。"""
@@ -664,6 +688,42 @@ class MeasureCliTest(unittest.TestCase):
         self.assertEqual("state_corrupt", payload["code"])
         self.assertNotIn("efficiency_percent", payload)
         self.assertEqual(before, state_file.read_bytes())
+
+    def test_completed_summary_semantics_are_revalidated(self) -> None:
+        """已封存摘要的來源、混入工作與基準關聯必須一致。"""
+        mutations = ("source", "mixed_work", "fingerprint")
+        for mutation in mutations:
+            with self.subTest(mutation=mutation):
+                measurement_id = self.start()
+                if mutation == "fingerprint":
+                    self.lock_baseline(measurement_id)
+                self.run_cli("pause", "--id", measurement_id)
+                self.run_cli(
+                    "complete",
+                    "--id",
+                    measurement_id,
+                    "--mixed-work",
+                    "no",
+                )
+                state_file = self.state_dir / f"{measurement_id}.json"
+                state = self.measure.read_state(state_file)
+                if mutation == "source":
+                    state["completed_summary"]["source"] = "activitywatch"
+                elif mutation == "mixed_work":
+                    state["completed_summary"]["mixed_work"] = "yes"
+                else:
+                    state["baseline"]["fingerprint"] = "invalid"
+                    state["completed_summary"]["baseline_fingerprint"] = "invalid"
+                self.measure.write_state(state_file, state)
+                code, payload, _ = self.run_cli(
+                    "complete",
+                    "--id",
+                    measurement_id,
+                    "--mixed-work",
+                    "no",
+                )
+                self.assertEqual(2, code)
+                self.assertEqual("state_corrupt", payload["code"])
 
     def test_complete_is_idempotent_before_delete(self) -> None:
         """刪除前重複 complete 應回傳相同封存摘要。"""
