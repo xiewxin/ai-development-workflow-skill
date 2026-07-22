@@ -75,6 +75,32 @@ class MeasureCliTest(unittest.TestCase):
         self.assertEqual(0, code)
         return str(payload["id"])
 
+    def valid_estimate_arguments(self) -> list[str]:
+        """回傳涵蓋全部固定階段的有效 PERT 參數。"""
+        return [
+            "--estimate",
+            "requirement_plan=600,900,1200",
+            "--estimate",
+            "test_design=300,600,900",
+            "--estimate",
+            "implementation=1800,2700,4200",
+            "--estimate",
+            "verification_fix=600,1200,2400",
+            "--estimate",
+            "docs_review=300,600,900",
+        ]
+
+    def lock_baseline(self, measurement_id: str) -> dict[str, object]:
+        """鎖定標準測試 PERT 並回傳摘要。"""
+        code, payload, _ = self.run_cli(
+            "baseline",
+            "--id",
+            measurement_id,
+            *self.valid_estimate_arguments(),
+        )
+        self.assertEqual(0, code)
+        return payload
+
     def test_start_pause_resume_complete_and_delete_lifecycle(self) -> None:
         """正常生命週期只累計閉合工作區間。"""
         measurement_id = self.start()
@@ -323,6 +349,229 @@ class MeasureCliTest(unittest.TestCase):
         self.assertIsInstance(caught, self.measure.MeasureError)
         self.assertEqual("state_write_failed", caught.code)
         self.assertEqual(before, state_file.read_bytes())
+
+    def test_pert_baseline_and_efficiency_are_reproducible(self) -> None:
+        """固定 PERT 與閉合區間應產生可重現提效摘要。"""
+        measurement_id = self.start()
+        self.clock.advance(100)
+        self.run_cli("pause", "--id", measurement_id)
+        baseline = self.lock_baseline(measurement_id)
+        self.assertEqual(6200, baseline["baseline_seconds"])
+        self.assertEqual(64, len(str(baseline["baseline_fingerprint"])))
+
+        self.run_cli("enter", "--id", measurement_id, "--phase", "test_design")
+        self.run_cli("resume", "--id", measurement_id)
+        self.clock.advance(100)
+        self.run_cli("pause", "--id", measurement_id)
+        self.run_cli("enter", "--id", measurement_id, "--phase", "implementation")
+        self.run_cli("resume", "--id", measurement_id)
+        self.clock.advance(100)
+        self.run_cli("pause", "--id", measurement_id)
+
+        completed = self.run_cli(
+            "complete",
+            "--id",
+            measurement_id,
+            "--mixed-work",
+            "no",
+        )[1]
+        self.assertEqual(300, completed["seconds"])
+        self.assertEqual(6200, completed["baseline_seconds"])
+        self.assertEqual(5900, completed["saved_seconds"])
+        self.assertEqual(95.16, completed["efficiency_percent"])
+        self.assertEqual("medium", completed["confidence"])
+
+    def test_baseline_is_idempotent_but_cannot_be_changed(self) -> None:
+        """相同基準可重送，不同基準在鎖定後應拒絕。"""
+        measurement_id = self.start()
+        first = self.lock_baseline(measurement_id)
+        self.clock.advance(50)
+        second = self.lock_baseline(measurement_id)
+        self.assertEqual(first, second)
+        changed = self.valid_estimate_arguments()
+        changed[1] = "requirement_plan=700,900,1200"
+        code, payload, _ = self.run_cli(
+            "baseline",
+            "--id",
+            measurement_id,
+            *changed,
+        )
+        self.assertEqual(2, code)
+        self.assertEqual("baseline_locked", payload["code"])
+
+    def test_baseline_cannot_be_created_after_implementation_time(self) -> None:
+        """產品實作已開始後不得倒推人工參考基準。"""
+        measurement_id = self.start()
+        self.run_cli("enter", "--id", measurement_id, "--phase", "implementation")
+        self.clock.advance(1)
+        self.run_cli("pause", "--id", measurement_id)
+        code, payload, _ = self.run_cli(
+            "baseline",
+            "--id",
+            measurement_id,
+            *self.valid_estimate_arguments(),
+        )
+        self.assertEqual(2, code)
+        self.assertEqual("baseline_too_late", payload["code"])
+
+    def test_invalid_pert_values_are_rejected(self) -> None:
+        """PERT 應拒絕缺階段、負數、非有限值與順序錯誤。"""
+        invalid_argument_sets = (
+            self.valid_estimate_arguments()[:-2],
+            [
+                *self.valid_estimate_arguments()[:-2],
+                "--estimate",
+                "docs_review=-1,0,1",
+            ],
+            [
+                *self.valid_estimate_arguments()[:-2],
+                "--estimate",
+                "docs_review=2,1,3",
+            ],
+            [
+                *self.valid_estimate_arguments()[:-2],
+                "--estimate",
+                "docs_review=0,nan,1",
+            ],
+            [
+                *self.valid_estimate_arguments()[:-2],
+                "--estimate",
+                "docs_review=0,0.5,1",
+            ],
+        )
+        for arguments in invalid_argument_sets:
+            with self.subTest(arguments=arguments):
+                measurement_id = self.start()
+                code, payload, _ = self.run_cli(
+                    "baseline",
+                    "--id",
+                    measurement_id,
+                    *arguments,
+                )
+                self.assertEqual(2, code)
+                self.assertEqual("invalid_baseline", payload["code"])
+
+    def test_overlapping_intervals_are_rejected(self) -> None:
+        """狀態中的重疊區間應停止完成，避免重複計時。"""
+        measurement_id = self.start()
+        self.clock.advance(20)
+        self.run_cli("pause", "--id", measurement_id)
+        state_file = self.state_dir / f"{measurement_id}.json"
+        state = self.measure.read_state(state_file)
+        first = dict(state["intervals"][0])
+        state["intervals"].append(
+            {
+                "phase": "test_design",
+                "start": first["start"] + 10,
+                "end": first["end"] + 10,
+            }
+        )
+        self.measure.write_state(state_file, state)
+        code, payload, _ = self.run_cli(
+            "complete",
+            "--id",
+            measurement_id,
+            "--mixed-work",
+            "no",
+        )
+        self.assertEqual(2, code)
+        self.assertEqual("state_corrupt", payload["code"])
+
+    def test_full_summary_and_routine_output_stay_compact(self) -> None:
+        """含基準的完整摘要與例行輸出仍應簡短。"""
+        measurement_id = self.start()
+        self.clock.advance(1)
+        self.run_cli("pause", "--id", measurement_id)
+        _, _, status_raw = self.run_cli("status", "--id", measurement_id)
+        self.assertLessEqual(len(status_raw), 200)
+        self.lock_baseline(measurement_id)
+        _, completed, completed_raw = self.run_cli(
+            "complete",
+            "--id",
+            measurement_id,
+            "--mixed-work",
+            "unknown",
+        )
+        self.assertIn("efficiency_percent", completed)
+        self.assertLessEqual(len(completed_raw), 1024)
+
+    def test_mixed_work_lowers_confidence(self) -> None:
+        """混入其他工作或無法判定時應降低可信度。"""
+        for mixed_work in ("yes", "unknown"):
+            with self.subTest(mixed_work=mixed_work):
+                measurement_id = self.start()
+                self.run_cli("pause", "--id", measurement_id)
+                completed = self.run_cli(
+                    "complete",
+                    "--id",
+                    measurement_id,
+                    "--mixed-work",
+                    mixed_work,
+                )[1]
+                self.assertEqual("low", completed["confidence"])
+                self.assertIn(f"mixed_work_{mixed_work}", completed["anomalies"])
+
+    def test_negative_efficiency_is_preserved(self) -> None:
+        """AI 協作參考耗時高於基準時應保留負值。"""
+        measurement_id = self.start()
+        arguments: list[str] = []
+        for phase in self.measure.PHASES:
+            values = "10,10,10" if phase == "requirement_plan" else "0,0,0"
+            arguments.extend(("--estimate", f"{phase}={values}"))
+        code, _, _ = self.run_cli("baseline", "--id", measurement_id, *arguments)
+        self.assertEqual(0, code)
+        self.clock.advance(20)
+        self.run_cli("pause", "--id", measurement_id)
+        completed = self.run_cli(
+            "complete",
+            "--id",
+            measurement_id,
+            "--mixed-work",
+            "no",
+        )[1]
+        self.assertEqual(-10, completed["saved_seconds"])
+        self.assertEqual(-100.0, completed["efficiency_percent"])
+
+    def test_baseline_fingerprint_mismatch_suppresses_efficiency(self) -> None:
+        """基準指紋不一致時只保留耗時並揭露異常。"""
+        measurement_id = self.start()
+        self.lock_baseline(measurement_id)
+        self.run_cli("pause", "--id", measurement_id)
+        state_file = self.state_dir / f"{measurement_id}.json"
+        state = self.measure.read_state(state_file)
+        state["baseline"]["fingerprint"] = "invalid"
+        self.measure.write_state(state_file, state)
+        completed = self.run_cli(
+            "complete",
+            "--id",
+            measurement_id,
+            "--mixed-work",
+            "no",
+        )[1]
+        self.assertNotIn("saved_seconds", completed)
+        self.assertNotIn("efficiency_percent", completed)
+        self.assertEqual("low", completed["confidence"])
+        self.assertIn("baseline_fingerprint_mismatch", completed["anomalies"])
+
+    def test_complete_is_idempotent_before_delete(self) -> None:
+        """刪除前重複 complete 應回傳相同封存摘要。"""
+        measurement_id = self.start()
+        self.run_cli("pause", "--id", measurement_id)
+        first = self.run_cli(
+            "complete",
+            "--id",
+            measurement_id,
+            "--mixed-work",
+            "no",
+        )[1]
+        second = self.run_cli(
+            "complete",
+            "--id",
+            measurement_id,
+            "--mixed-work",
+            "unknown",
+        )[1]
+        self.assertEqual(first, second)
 
 
 if __name__ == "__main__":

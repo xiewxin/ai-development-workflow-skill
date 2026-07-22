@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Callable, Sequence
+import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -270,6 +272,72 @@ def interval_seconds(intervals: list[dict[str, Any]]) -> int:
     return round(total)
 
 
+def validate_intervals(intervals: list[dict[str, Any]]) -> None:
+    """驗證所有已閉合區間的階段與時間不重疊。"""
+    normalized: list[tuple[float, float]] = []
+    try:
+        for interval in intervals:
+            if interval["phase"] not in PHASES:
+                raise MeasureError("state_corrupt", "計量區間階段無效")
+            start = float(interval["start"])
+            end = float(interval["end"])
+            if not math.isfinite(start) or not math.isfinite(end) or end < start:
+                raise MeasureError("state_corrupt", "計量區間時間順序無效")
+            normalized.append((start, end))
+    except (KeyError, TypeError, ValueError) as error:
+        raise MeasureError("state_corrupt", "計量區間結構無效") from error
+    previous_end: float | None = None
+    for start, end in sorted(normalized):
+        if previous_end is not None and start < previous_end:
+            raise MeasureError("state_corrupt", "計量區間不得重疊")
+        previous_end = end
+
+
+def parse_estimates(items: list[str]) -> dict[str, list[int]]:
+    """解析並驗證五個固定階段的 PERT 秒數。"""
+    estimates: dict[str, list[int]] = {}
+    for item in items:
+        if "=" not in item:
+            raise MeasureError("invalid_baseline", "PERT 格式必須是 phase=O,M,P")
+        phase, raw_values = item.split("=", 1)
+        if phase not in PHASES or phase in estimates:
+            raise MeasureError("invalid_baseline", "PERT 階段未知或重複")
+        parts = raw_values.split(",")
+        if len(parts) != 3:
+            raise MeasureError("invalid_baseline", "每個 PERT 階段必須包含 O、M、P")
+        if not all(re.fullmatch(r"\d+", value) for value in parts):
+            raise MeasureError("invalid_baseline", "PERT 數值必須是非負整數秒")
+        numbers = [int(value) for value in parts]
+        if not numbers[0] <= numbers[1] <= numbers[2]:
+            raise MeasureError("invalid_baseline", "PERT 必須滿足 O <= M <= P")
+        estimates[phase] = numbers
+    if set(estimates) != set(PHASES):
+        raise MeasureError("invalid_baseline", "PERT 必須涵蓋全部固定階段")
+    return {phase: estimates[phase] for phase in PHASES}
+
+
+def expected_phase_seconds(estimates: dict[str, list[int]]) -> dict[str, int]:
+    """依 PERT 公式計算各階段人工參考秒數。"""
+    return {
+        phase: round((values[0] + 4 * values[1] + values[2]) / 6)
+        for phase, values in estimates.items()
+    }
+
+
+def calculate_baseline_fingerprint(
+    estimates: dict[str, list[int]],
+    locked_at: float,
+) -> str:
+    """以正規化數值與鎖定時間計算基準指紋。"""
+    canonical = json.dumps(
+        {"estimates": estimates, "locked_at": locked_at},
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
+
+
 def brief_payload(state: dict[str, Any]) -> dict[str, Any]:
     """建立例行命令使用的精簡輸出。"""
     return {
@@ -394,6 +462,58 @@ def recover_action(exclude_open: bool) -> Callable[[dict[str, Any]], dict[str, A
     return action
 
 
+def baseline_action(
+    estimates: dict[str, list[int]],
+    current_time: float,
+) -> Callable[[dict[str, Any]], dict[str, Any]]:
+    """建立一次性鎖定 PERT 人工參考基準的更新。"""
+    def action(state: dict[str, Any]) -> dict[str, Any]:
+        if state["state"] not in ("running", "paused"):
+            raise MeasureError("invalid_transition", "目前狀態不能鎖定人工參考基準")
+        existing = state.get("baseline")
+        if isinstance(existing, dict):
+            if existing.get("estimates") != estimates:
+                raise MeasureError("baseline_locked", "人工參考基準已鎖定，不得修改")
+            return {
+                "id": state["id"],
+                "state": state["state"],
+                "baseline_seconds": existing["seconds"],
+                "baseline_fingerprint": existing["fingerprint"],
+            }
+        implementation_intervals = [
+            interval
+            for interval in state["intervals"]
+            if interval["phase"] == "implementation"
+            and float(interval["end"]) > float(interval["start"])
+        ]
+        opened = state.get("open")
+        if implementation_intervals or (
+            isinstance(opened, dict) and opened.get("phase") == "implementation"
+        ):
+            raise MeasureError("baseline_too_late", "產品實作開始後不得倒推人工參考基準")
+        phase_seconds = expected_phase_seconds(estimates)
+        baseline_seconds = sum(phase_seconds.values())
+        if baseline_seconds <= 0:
+            raise MeasureError("invalid_baseline", "人工參考基準必須大於零")
+        locked_at = float(current_time)
+        fingerprint = calculate_baseline_fingerprint(estimates, locked_at)
+        state["baseline"] = {
+            "estimates": estimates,
+            "phase_seconds": phase_seconds,
+            "seconds": baseline_seconds,
+            "locked_at": locked_at,
+            "fingerprint": fingerprint,
+        }
+        return {
+            "id": state["id"],
+            "state": state["state"],
+            "baseline_seconds": baseline_seconds,
+            "baseline_fingerprint": fingerprint,
+        }
+
+    return action
+
+
 def complete_action(mixed_work: str) -> Callable[[dict[str, Any]], dict[str, Any]]:
     """建立完成封存與聚合摘要。"""
     def action(state: dict[str, Any]) -> dict[str, Any]:
@@ -408,6 +528,7 @@ def complete_action(mixed_work: str) -> Callable[[dict[str, Any]], dict[str, Any
             anomaly = f"mixed_work_{mixed_work}"
             if anomaly not in anomalies:
                 anomalies.append(anomaly)
+        validate_intervals(state["intervals"])
         by_phase = {
             phase: interval_seconds(
                 [interval for interval in state["intervals"] if interval["phase"] == phase]
@@ -424,6 +545,29 @@ def complete_action(mixed_work: str) -> Callable[[dict[str, Any]], dict[str, Any
             "anomalies": anomalies,
             "mixed_work": mixed_work,
         }
+        baseline = state.get("baseline")
+        if isinstance(baseline, dict):
+            expected_fingerprint = calculate_baseline_fingerprint(
+                baseline["estimates"],
+                float(baseline["locked_at"]),
+            )
+            if expected_fingerprint != baseline.get("fingerprint"):
+                confidence = "low"
+                if "baseline_fingerprint_mismatch" not in anomalies:
+                    anomalies.append("baseline_fingerprint_mismatch")
+                summary["confidence"] = confidence
+                summary["anomalies"] = anomalies
+            else:
+                baseline_seconds = int(baseline["seconds"])
+                saved_seconds = baseline_seconds - int(summary["seconds"])
+                summary.update(
+                    {
+                        "baseline_seconds": baseline_seconds,
+                        "baseline_fingerprint": baseline["fingerprint"],
+                        "saved_seconds": saved_seconds,
+                        "efficiency_percent": round(saved_seconds / baseline_seconds * 100, 2),
+                    }
+                )
         state["state"] = "completed"
         state["confidence"] = confidence
         state["anomalies"] = anomalies
@@ -512,6 +656,13 @@ def main(
                 arguments.id,
                 complete_action(arguments.mixed_work),
             )
+        elif arguments.command == "baseline":
+            estimates = parse_estimates(arguments.estimate)
+            result = update_measurement(
+                state_dir,
+                arguments.id,
+                baseline_action(estimates, current_time),
+            )
         elif arguments.command == "status":
             result = status_measurement(state_dir, arguments.id)
         elif arguments.command == "delete":
@@ -522,7 +673,7 @@ def main(
                 arguments.confirm,
             )
         else:
-            raise MeasureError("not_implemented", "人工參考基準尚未實作")
+            raise MeasureError("invalid_arguments", "未知計量命令")
         emit(result, stdout)
         return 0
     except MeasureError as error:
