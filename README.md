@@ -112,7 +112,7 @@ bash tests/test-validate-publication.sh
 bash scripts/validate-publication.sh
 ```
 
-validator 會掃描工作樹中的已追蹤與未追蹤檔案（排除 `.git`），檢查 Skill 結構、元資料、Markdown 相對連結、範本章節、繁體中文與疑似敏感資訊。錯誤只列出相對路徑、規則與必要行號，不回顯命中內容。
+validator 會掃描工作目錄中的檔案（排除 `.git` 與 `.idea`），檢查 Skill 結構、元資料、Markdown 相對連結、範本章節、繁體中文與疑似敏感資訊。錯誤只列出相對路徑、規則與必要行號，不回顯命中內容。
 
 ## 語言 allowlist
 
