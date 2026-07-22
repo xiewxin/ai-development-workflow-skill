@@ -98,7 +98,7 @@ python3 scripts/measure.py delete --id 0123456789abcdef0123456789abcdef
 ## ActivityWatch 可選升級
 
 - 只有使用者選擇 `--provider activitywatch` 才讀取本機 API；預設 Provider 仍是 session。
-- 預設使用 `localhost` 的 `5600` port；如需其他 loopback port，以 `AI_WORKFLOW_ACTIVITYWATCH_URL` 設定。只允許無 userinfo 的 loopback HTTP，所有請求固定為 GET 且逾時兩秒。
+- 預設使用 `localhost` 的 `5600` port；如需其他 loopback port，以 `AI_WORKFLOW_ACTIVITYWATCH_URL` 設定。主機名稱只接受 `localhost` 或 loopback IP literal，不接受其他可解析到 loopback 的網域；URL 只允許無 userinfo 的 HTTP，所有請求固定為 GET 且逾時兩秒。
 - 只選取本機上 `type=afkstatus`、`client=aw-watcher-afk` 的唯一 bucket，且只統計 `status=not-afk` 事件與 session 閉合區間的交集。不查詢 window bucket。
 - 無候選、多候選、回應無效、逾時、非 loopback 或導向外部主機時，記錄 `activitywatch_fallback`、降為低可信度並使用 session。
 - 不自動安裝、啟動或設定 ActivityWatch。

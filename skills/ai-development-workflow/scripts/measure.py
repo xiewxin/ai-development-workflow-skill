@@ -657,16 +657,13 @@ def validate_activitywatch_base_url(value: str) -> str:
         or parsed.path not in ("", "/")
     ):
         raise ActivityWatchError("ActivityWatch 只允許 loopback HTTP 位址")
-    try:
-        addresses = {
-            info[4][0]
-            for info in socket.getaddrinfo(parsed.hostname, port, type=socket.SOCK_STREAM)
-        }
-        if not addresses or not all(ipaddress.ip_address(address).is_loopback for address in addresses):
-            raise ActivityWatchError("ActivityWatch 主機不是 loopback")
-    except (OSError, ValueError) as error:
-        raise ActivityWatchError("ActivityWatch loopback 位址無法驗證") from error
     hostname = parsed.hostname
+    if hostname != "localhost":
+        try:
+            if not ipaddress.ip_address(hostname).is_loopback:
+                raise ActivityWatchError("ActivityWatch 主機不是 loopback")
+        except ValueError as error:
+            raise ActivityWatchError("ActivityWatch 只允許 localhost 或 loopback IP") from error
     host = f"[{hostname}]" if ":" in hostname else hostname
     return urlunsplit(("http", f"{host}:{port}", "", "", ""))
 

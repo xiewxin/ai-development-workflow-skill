@@ -861,6 +861,15 @@ class MeasureCliTest(unittest.TestCase):
             with self.subTest(unsafe_url=unsafe_url):
                 with self.assertRaises(self.measure.ActivityWatchError):
                     self.measure.validate_activitywatch_base_url(unsafe_url)
+        with patch.object(
+            self.measure.socket,
+            "getaddrinfo",
+            side_effect=AssertionError("不得解析外部主機"),
+        ):
+            with self.assertRaises(self.measure.ActivityWatchError):
+                self.measure.validate_activitywatch_base_url(
+                    "http://example.invalid:5600"
+                )
         self.activitywatch_url = "https://example.com:5600"
         measurement_id = self.start(provider="activitywatch")
         self.clock.advance(5)
