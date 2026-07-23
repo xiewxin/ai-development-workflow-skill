@@ -1,5 +1,7 @@
 # AI Development Workflow Skill
 
+[English](README.en.md) | 繁體中文
+
 這是一個同時支援 Codex 與 Claude Code 的公開 Skill，用可驗證的流程協助完成需求計畫、測試設計、Git Diff 審查與端到端實作。
 
 ## 技術與相容性
@@ -19,11 +21,18 @@
 
 ## 外部工作流整合
 
-- 可依目前對話、倉庫規範與活動產物的可驗證證據，選用 Superpowers、Spec Kit、OpenSpec、BMAD 或其他具明確能力與所有權的工作流。
+- 可依目前對話、倉庫規範與活動產物的可驗證證據，選用 Superpowers、Matt Pocock Skills、Spec Kit、OpenSpec、BMAD 或其他具明確能力與所有權的工作流。
 - 每個需求只選一套需求級主 Provider；次要 Provider 只補主流缺少、允許獨立使用且不重複所有權的能力。
 - 外部產物保留唯一可寫所有者；本 Skill 只橋接來源、狀態、缺口與同步結果，不複製已完整的 spec、plan 或 tasks。
 - 沒有外部工作流時，四種原生模式仍可完整運作；可選 Provider 失效時只降級受影響能力，不宣稱 Provider 已通過。
 - 整合不會自動安裝、初始化、封存或發布外部工作流，也不會在未授權時執行遠端寫入。
+
+## 需求計畫特性
+
+- 先自行查證環境事實，再對會改變範圍、合同或方案的決策逐題確認並附建議答案。
+- 只在適用時整理使用者或外部系統可觀察的行為與驗收場景，不為湊格式產生冗長 User Stories。
+- 優先選擇使用者可觀察的最高且穩定公開介面作為測試 seam；既有低層測試不能充分驗證可見合同時，可在該公開介面新增測試並取得核准。
+- 實作以可獨立驗證的垂直切片、阻塞關係與完成判準排序；Wide refactor 採 `expand → migrate → contract` 並設整合關卡。
 
 ## 參考計時與提效
 

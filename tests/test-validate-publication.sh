@@ -85,10 +85,11 @@ create_valid_repo() {
         '## 基本資訊／狀態' \
         '## Provider 橋接' \
         '- 主 Provider：{{INPUT:Provider 或原生}}' \
-        '| 產物相對路徑 | 完整性 | 唯一可寫所有者 | 同步結果 |' \
+        '| 產物定位 | 完整性 | 唯一可寫所有者 | 同步結果 |' \
         '| --- | --- | --- | --- |' \
-        '| {{INPUT:相對路徑}} | {{INPUT:完整性}} | {{INPUT:所有者}} | {{INPUT:同步結果}} |' \
+        '| {{INPUT:相對路徑或識別字}} | {{INPUT:完整性}} | {{INPUT:所有者}} | {{INPUT:同步結果}} |' \
         '## 需求來源與目標' \
+        '### 行為與驗收場景（僅適用時保留）' \
         '## 範圍與非範圍' \
         '## 現況與證據' \
         '## 影響分析' \
@@ -96,8 +97,12 @@ create_valid_repo() {
         '## 方案與決策' \
         '## 風險' \
         '## 檔案級實作計畫' \
-        '## 實作清單' \
+        '## 實作切片' \
+        '| 端到端可驗證成果 | Blocked by | 完成判準 |' \
+        '| --- | --- | --- |' \
+        '| {{INPUT:成果}} | {{INPUT:前置}} | {{INPUT:判準}} |' \
         '## 測試與驗證' \
+        '- 測試 seam：{{INPUT:最高且穩定的公開介面}}' \
         '## 文件改動' \
         '## 待確認事項' \
         '## 變更紀錄' \
@@ -137,10 +142,11 @@ create_valid_repo() {
         '## 基本資訊／關聯' \
         '## Provider 橋接' \
         '- 主 Provider：{{INPUT:Provider 或原生}}' \
-        '| 產物相對路徑 | 完整性 | 唯一可寫所有者 | 同步結果 |' \
+        '| 產物定位 | 完整性 | 唯一可寫所有者 | 同步結果 |' \
         '| --- | --- | --- | --- |' \
-        '| {{INPUT:相對路徑}} | {{INPUT:完整性}} | {{INPUT:所有者}} | {{INPUT:同步結果}} |' \
+        '| {{INPUT:相對路徑或識別字}} | {{INPUT:完整性}} | {{INPUT:所有者}} | {{INPUT:同步結果}} |' \
         '## 範圍與策略' \
+        '- 測試 seam：{{INPUT:最高且穩定的公開介面}}' \
         '## 環境與依賴' \
         '## 測試資料策略' \
         '## 詳細情境' \
@@ -896,6 +902,18 @@ sed -i.bak 's/唯一可寫所有者/所有者資訊/' "${bridge_file}"
 rm "${bridge_file}.bak"
 expect_fail "需求範本缺少 Provider 橋接欄位" "${missing_requirement_bridge_field_root}" "Provider 橋接欄位"
 
+missing_slice_field_root="$(new_case missing-slice-field)"
+slice_file="${missing_slice_field_root}/skills/ai-development-workflow/assets/requirement-plan-template.md"
+sed -i.bak 's/完成判準/完成資訊/' "${slice_file}"
+rm "${slice_file}.bak"
+expect_fail "需求範本缺少實作切片欄位" "${missing_slice_field_root}" "實作切片欄位"
+
+missing_requirement_seam_root="$(new_case missing-requirement-seam)"
+seam_file="${missing_requirement_seam_root}/skills/ai-development-workflow/assets/requirement-plan-template.md"
+sed -i.bak 's/測試 seam/驗證介面/' "${seam_file}"
+rm "${seam_file}.bak"
+expect_fail "需求範本缺少測試 seam" "${missing_requirement_seam_root}" "需求計畫測試 seam"
+
 missing_test_heading_root="$(new_case missing-test-heading)"
 heading_file="${missing_test_heading_root}/skills/ai-development-workflow/assets/test-design-template.md"
 sed -i.bak 's/^## 回歸$/## 無回歸資料/' "${heading_file}"
@@ -907,6 +925,12 @@ bridge_file="${missing_test_bridge_field_root}/skills/ai-development-workflow/as
 sed -i.bak 's/同步結果/同步資訊/' "${bridge_file}"
 rm "${bridge_file}.bak"
 expect_fail "測試範本缺少 Provider 橋接欄位" "${missing_test_bridge_field_root}" "Provider 橋接欄位"
+
+missing_test_seam_root="$(new_case missing-test-seam)"
+seam_file="${missing_test_seam_root}/skills/ai-development-workflow/assets/test-design-template.md"
+sed -i.bak 's/測試 seam/驗證介面/' "${seam_file}"
+rm "${seam_file}.bak"
+expect_fail "測試範本缺少測試 seam" "${missing_test_seam_root}" "測試設計測試 seam"
 
 pythonless_root="$(new_case pythonless)"
 pythonless_bin="${TEST_ROOT}/pythonless-bin"

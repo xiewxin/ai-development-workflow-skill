@@ -24,6 +24,7 @@ class WorkflowIntegrationContractTest(unittest.TestCase):
             "## 命令安全與授權",
             "## 降級規則",
             "Superpowers",
+            "Matt Pocock Skills",
             "Spec Kit",
             "OpenSpec",
             "BMAD",
@@ -41,7 +42,7 @@ class WorkflowIntegrationContractTest(unittest.TestCase):
             self.assertIn("Provider 橋接", text)
             for expected in (
                 "主 Provider",
-                "產物相對路徑",
+                "產物定位",
                 "唯一可寫所有者",
                 "完整性",
                 "同步結果",
@@ -83,6 +84,38 @@ class WorkflowIntegrationContractTest(unittest.TestCase):
         self.assertIn("阻斷受影響階段", integration)
         self.assertIn("非必要產物", integration)
         self.assertIn("同步未驗證", integration)
+
+    def test_matt_pocock_provider_maps_artifacts_and_side_effects(self) -> None:
+        """Matt Provider 應區分釐清、正式產物與實作副作用。"""
+        skill = self.read("SKILL.md")
+        integration = self.read("references/workflow-integration.md")
+        for expected in (
+            "### Matt Pocock Skills",
+            "`grill-with-docs`",
+            "`to-spec`",
+            "`to-tickets`",
+            "`wayfinder`",
+            "`tdd`",
+            "`code-review`",
+            "`implement`",
+            "tracker 識別字",
+            "提交授權",
+            "已安裝不代表",
+        ):
+            with self.subTest(expected=expected):
+                self.assertIn(expected, integration)
+        self.assertIn("目前對話已明確觸發或使用", integration)
+        self.assertNotIn("平台目前已載入且可用的 Skill 或能力清單", integration)
+        self.assertIn("只有名稱、可用能力清單、已安裝工具或目錄存在不構成啟用證據", skill)
+
+    def test_bridge_schema_accepts_tracker_artifact_identifiers(self) -> None:
+        """外部正式產物不在 repo 時應可使用穩定 tracker 識別字。"""
+        requirement = self.read("assets/requirement-plan-template.md")
+        test_design = self.read("assets/test-design-template.md")
+        guide = self.read("references/requirement-plan.md")
+        for content in (requirement, test_design, guide):
+            self.assertIn("tracker 識別字", content)
+        self.assertIn("相對路徑或 tracker 識別字", guide)
 
 
 if __name__ == "__main__":
