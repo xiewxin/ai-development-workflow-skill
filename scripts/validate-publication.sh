@@ -495,6 +495,7 @@ validate_headings(
         "基本資訊",
         "Provider 橋接",
         "需求來源與目標",
+        "行為與驗收場景（僅適用時保留）",
         "範圍與非範圍",
         "現況與證據",
         "影響分析",
@@ -502,7 +503,7 @@ validate_headings(
         "方案與決策",
         "風險",
         "檔案級實作計畫",
-        "實作清單",
+        "實作切片",
         "測試與驗證",
         "文件改動",
         "待確認事項",
@@ -515,12 +516,30 @@ validate_section_fields(
     "Provider 橋接",
     [
         "主 Provider",
-        "產物相對路徑",
+        "產物定位",
         "唯一可寫所有者",
         "完整性",
         "同步結果",
     ],
     "Provider 橋接欄位",
+)
+validate_section_fields(
+    skill_root / "assets" / "requirement-plan-template.md",
+    "實作切片",
+    [
+        "端到端可驗證成果",
+        "Blocked by",
+        "完成判準",
+    ],
+    "實作切片欄位",
+)
+validate_section_fields(
+    skill_root / "assets" / "requirement-plan-template.md",
+    "測試與驗證",
+    [
+        "測試 seam",
+    ],
+    "需求計畫測試 seam",
 )
 validate_headings(
     skill_root / "assets" / "ai-collaboration-section-template.md",
@@ -585,12 +604,20 @@ validate_section_fields(
     "Provider 橋接",
     [
         "主 Provider",
-        "產物相對路徑",
+        "產物定位",
         "唯一可寫所有者",
         "完整性",
         "同步結果",
     ],
     "Provider 橋接欄位",
+)
+validate_section_fields(
+    skill_root / "assets" / "test-design-template.md",
+    "範圍與策略",
+    [
+        "測試 seam",
+    ],
+    "測試設計測試 seam",
 )
 
 

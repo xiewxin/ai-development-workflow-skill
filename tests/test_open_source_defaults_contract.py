@@ -13,6 +13,10 @@ class OpenSourceDefaultsContractTest(unittest.TestCase):
         """讀取 Skill 內指定的 UTF-8 文件。"""
         return (SKILL_ROOT / relative).read_text(encoding="utf-8")
 
+    def read_root(self, relative: str) -> str:
+        """讀取公開倉庫根目錄的 UTF-8 文件。"""
+        return (ROOT / relative).read_text(encoding="utf-8")
+
     def test_default_plan_omits_ai_collaboration_section(self) -> None:
         """未明確啟用時，基本需求計畫不得產生 AI 成效章節。"""
         template = self.read("assets/requirement-plan-template.md")
@@ -81,6 +85,21 @@ class OpenSourceDefaultsContractTest(unittest.TestCase):
         self.assertIn("互動語言", guide)
         self.assertIn("目標倉庫", guide)
         self.assertNotIn("預設使用繁體中文", guide)
+
+    def test_public_readme_supports_traditional_chinese_and_english(self) -> None:
+        """公開說明應提供可互相切換的繁中與英文入口。"""
+        traditional = self.read_root("README.md")
+        english = self.read_root("README.en.md")
+        self.assertIn("[English](README.en.md)", traditional)
+        self.assertIn("[繁體中文](README.md)", english)
+        for expected in (
+            "Four Modes",
+            "External Workflow Integration",
+            "Installation",
+            "Security and Privacy",
+            "MIT License",
+        ):
+            self.assertIn(expected, english)
 
 
 if __name__ == "__main__":
