@@ -139,6 +139,7 @@ npx skills update ai-development-workflow -g
 ## 發布前驗證
 
 ```bash
+python3 -m unittest discover -s tests -p "test_*.py" -v
 bash tests/test-validate-publication.sh
 bash scripts/validate-publication.sh
 ```
