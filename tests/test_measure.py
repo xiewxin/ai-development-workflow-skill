@@ -10,7 +10,6 @@ import socket
 import sys
 import tempfile
 import threading
-import time
 import unittest
 from unittest.mock import patch
 from urllib.parse import unquote, urlsplit, urlunsplit
@@ -116,7 +115,6 @@ class MeasureCliTest(unittest.TestCase):
         events: object,
         buckets_status: int = 200,
         redirect: str | None = None,
-        delay: float = 0,
     ) -> tuple[list[tuple[str, str]], str]:
         """啟動只用於測試的 ActivityWatch 假服務。"""
         requests: list[tuple[str, str]] = []
@@ -127,8 +125,6 @@ class MeasureCliTest(unittest.TestCase):
             def do_GET(self) -> None:
                 """處理唯讀測試請求。"""
                 requests.append(("GET", self.path))
-                if delay:
-                    time.sleep(delay)
                 if redirect is not None and self.path.startswith("/api/0/buckets/"):
                     self.send_response(302)
                     self.send_header("Location", redirect)
@@ -903,28 +899,36 @@ class MeasureCliTest(unittest.TestCase):
         self.assertIn("activitywatch_fallback", redirected["anomalies"])
         self.assertEqual([("GET", "/api/0/buckets/")], requests)
 
-    def test_activitywatch_timeout_falls_back_without_blocking_workflow(self) -> None:
-        """ActivityWatch 逾時後應降級，不中斷完結流程。"""
-        _, self.activitywatch_url = self.start_activitywatch_server(
-            buckets={},
-            events=[],
-            delay=2.2,
-        )
+    def test_activitywatch_timeout_uses_fixed_deadline_and_falls_back(self) -> None:
+        """ActivityWatch 使用固定逾時，逾時後降級而不中斷流程。"""
+        timeouts: list[float] = []
+
+        class TimeoutOpener:
+            """記錄逾時參數並模擬本機 API 逾時。"""
+
+            def open(self, request: object, timeout: float) -> None:
+                """以可重現方式拋出逾時。"""
+                timeouts.append(timeout)
+                raise TimeoutError
+
         measurement_id = self.start(provider="activitywatch")
         self.clock.advance(5)
         self.run_cli("pause", "--id", measurement_id)
-        started = time.monotonic()
-        completed = self.run_cli(
-            "complete",
-            "--id",
-            measurement_id,
-            "--mixed-work",
-            "no",
-        )[1]
-        elapsed = time.monotonic() - started
+        with patch.object(
+            self.measure,
+            "build_opener",
+            return_value=TimeoutOpener(),
+        ):
+            completed = self.run_cli(
+                "complete",
+                "--id",
+                measurement_id,
+                "--mixed-work",
+                "no",
+            )[1]
         self.assertEqual("session", completed["source"])
         self.assertIn("activitywatch_fallback", completed["anomalies"])
-        self.assertLess(elapsed, 2.2)
+        self.assertEqual([self.measure.ACTIVITYWATCH_TIMEOUT_SECONDS], timeouts)
 
 
 if __name__ == "__main__":
