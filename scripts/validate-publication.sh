@@ -115,6 +115,7 @@ required_files = [
     "references/reference-timing.md",
     "references/workflow-integration.md",
     "assets/requirement-plan-template.md",
+    "assets/ai-collaboration-section-template.md",
     "assets/test-design-template.md",
     "scripts/measure.py",
 ]
@@ -507,7 +508,6 @@ validate_headings(
         "待確認事項",
         "變更紀錄",
         "實作與驗證結果",
-        "AI 協作紀錄與成效",
     ],
 )
 validate_section_fields(
@@ -522,8 +522,14 @@ validate_section_fields(
     ],
     "Provider 橋接欄位",
 )
+validate_headings(
+    skill_root / "assets" / "ai-collaboration-section-template.md",
+    [
+        "AI 協作紀錄與成效",
+    ],
+)
 validate_required_fields(
-    skill_root / "assets" / "requirement-plan-template.md",
+    skill_root / "assets" / "ai-collaboration-section-template.md",
     "AI 協作紀錄與成效",
     [
         "可驗證貢獻",
@@ -537,6 +543,7 @@ validate_required_fields(
         "人工決策與介入",
         "計量 ID",
         "計量模式與資料來源",
+        "計量覆蓋度",
         "階段級 PERT",
         "人工參考基準與鎖定時間",
         "基準指紋",
@@ -551,11 +558,11 @@ validate_required_fields(
     ],
     "AI 提效欄位",
 )
-requirement_template = skill_root / "assets" / "requirement-plan-template.md"
-if requirement_template.is_file() and not requirement_template.is_symlink():
-    template_text = markdown_without_fenced_code(read_text(requirement_template))
+ai_section_template = skill_root / "assets" / "ai-collaboration-section-template.md"
+if ai_section_template.is_file() and not ai_section_template.is_symlink():
+    template_text = markdown_without_fenced_code(read_text(ai_section_template))
     if "../references/reference-timing.md" not in template_text:
-        add_error(requirement_template, "參考計時連結")
+        add_error(ai_section_template, "參考計時連結")
 validate_headings(
     skill_root / "assets" / "test-design-template.md",
     [

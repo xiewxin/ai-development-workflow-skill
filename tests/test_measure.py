@@ -255,6 +255,33 @@ class MeasureCliTest(unittest.TestCase):
         )[1]
         self.assertEqual(20, completed["seconds"])
 
+    def test_new_turn_resume_excludes_a_stale_open_interval(self) -> None:
+        """續接回合應以單一命令排除上回合未閉合區間並重新計時。"""
+        measurement_id = self.start()
+        self.clock.advance(110)
+        resumed = self.run_cli(
+            "resume",
+            "--id",
+            measurement_id,
+            "--new-turn",
+        )[1]
+        self.assertEqual("running", resumed["state"])
+        self.assertIn("open_interval_excluded", resumed["anomalies"])
+        self.clock.advance(20)
+        self.run_cli("pause", "--id", measurement_id)
+        completed = self.run_cli(
+            "complete",
+            "--id",
+            measurement_id,
+            "--mixed-work",
+            "no",
+            "--coverage",
+            "complete",
+        )[1]
+        self.assertEqual(20, completed["seconds"])
+        self.assertEqual("partial", completed["coverage"])
+        self.assertNotIn("efficiency_percent", completed)
+
     def test_running_measurement_requires_pause_before_complete(self) -> None:
         """尚有開啟區間時不得完成計量。"""
         measurement_id = self.start()
@@ -484,12 +511,23 @@ class MeasureCliTest(unittest.TestCase):
             measurement_id,
             "--mixed-work",
             "no",
+            "--coverage",
+            "complete",
         )[1]
         self.assertEqual(300, completed["seconds"])
+        self.assertEqual("complete", completed["coverage"])
         self.assertEqual(6200, completed["baseline_seconds"])
         self.assertEqual(5900, completed["saved_seconds"])
         self.assertEqual(95.16, completed["efficiency_percent"])
         self.assertEqual("medium", completed["confidence"])
+        self.assertTrue(
+            {
+                "token",
+                "tokens",
+                "token_count",
+                "token_usage",
+            }.isdisjoint(completed)
+        )
 
     def test_baseline_is_idempotent_but_cannot_be_changed(self) -> None:
         """相同基準可重送，不同基準在鎖定後應拒絕。"""
@@ -601,9 +639,38 @@ class MeasureCliTest(unittest.TestCase):
             measurement_id,
             "--mixed-work",
             "unknown",
+            "--coverage",
+            "complete",
         )
         self.assertIn("efficiency_percent", completed)
         self.assertLessEqual(len(completed_raw), 1024)
+
+    def test_partial_or_unknown_coverage_suppresses_efficiency(self) -> None:
+        """計量未覆蓋完整工作時不得用局部耗時推算整體提效。"""
+        for coverage, expected_anomaly in (
+            ("partial", "coverage_partial"),
+            (None, "coverage_unknown"),
+        ):
+            with self.subTest(coverage=coverage):
+                measurement_id = self.start()
+                self.lock_baseline(measurement_id)
+                self.clock.advance(30)
+                self.run_cli("pause", "--id", measurement_id)
+                arguments = [
+                    "complete",
+                    "--id",
+                    measurement_id,
+                    "--mixed-work",
+                    "no",
+                ]
+                if coverage is not None:
+                    arguments.extend(("--coverage", coverage))
+                completed = self.run_cli(*arguments)[1]
+                self.assertEqual(coverage or "unknown", completed["coverage"])
+                self.assertEqual("low", completed["confidence"])
+                self.assertIn(expected_anomaly, completed["anomalies"])
+                self.assertNotIn("saved_seconds", completed)
+                self.assertNotIn("efficiency_percent", completed)
 
     def test_mixed_work_lowers_confidence(self) -> None:
         """混入其他工作或無法判定時應降低可信度。"""
@@ -638,6 +705,8 @@ class MeasureCliTest(unittest.TestCase):
             measurement_id,
             "--mixed-work",
             "no",
+            "--coverage",
+            "complete",
         )[1]
         self.assertEqual(-10, completed["saved_seconds"])
         self.assertEqual(-100.0, completed["efficiency_percent"])
@@ -657,6 +726,8 @@ class MeasureCliTest(unittest.TestCase):
             measurement_id,
             "--mixed-work",
             "no",
+            "--coverage",
+            "complete",
         )[1]
         self.assertNotIn("saved_seconds", completed)
         self.assertNotIn("efficiency_percent", completed)
@@ -687,7 +758,7 @@ class MeasureCliTest(unittest.TestCase):
 
     def test_completed_summary_semantics_are_revalidated(self) -> None:
         """已封存摘要的來源、混入工作與基準關聯必須一致。"""
-        mutations = ("source", "mixed_work", "fingerprint")
+        mutations = ("source", "mixed_work", "coverage", "fingerprint")
         for mutation in mutations:
             with self.subTest(mutation=mutation):
                 measurement_id = self.start()
@@ -707,6 +778,8 @@ class MeasureCliTest(unittest.TestCase):
                     state["completed_summary"]["source"] = "activitywatch"
                 elif mutation == "mixed_work":
                     state["completed_summary"]["mixed_work"] = "yes"
+                elif mutation == "coverage":
+                    state["completed_summary"]["coverage"] = "complete"
                 else:
                     state["baseline"]["fingerprint"] = "invalid"
                     state["completed_summary"]["baseline_fingerprint"] = "invalid"

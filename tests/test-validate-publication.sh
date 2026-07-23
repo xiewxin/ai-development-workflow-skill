@@ -102,6 +102,11 @@ create_valid_repo() {
         '## 待確認事項' \
         '## 變更紀錄' \
         '## 實作與驗證結果' \
+        '' \
+        '[{{INPUT:文件名稱}}]({{INPUT:相對連結}})' \
+        > "${skill_root}/assets/requirement-plan-template.md"
+
+    printf '%s\n' \
         '## AI 協作紀錄與成效' \
         '參考[參考計時指南](../references/reference-timing.md)。' \
         '### 可驗證貢獻' \
@@ -113,6 +118,7 @@ create_valid_repo() {
         '### 效率量化' \
         '- 計量 ID：{{INPUT:隨機 ID 或無}}' \
         '- 計量模式與資料來源：{{INPUT:模式與來源}}' \
+        '- 計量覆蓋度：{{INPUT:complete、partial 或 unknown}}' \
         '- 階段級 PERT：{{INPUT:五階段估算與依據}}' \
         '- 人工參考基準與鎖定時間：{{INPUT:基準與時間}}' \
         '- 基準指紋：{{INPUT:指紋或無}}' \
@@ -124,9 +130,7 @@ create_valid_repo() {
         '- 異常與混入工作：{{INPUT:異常、結論與影響}}' \
         '- 歸因限制：{{INPUT:其他可能影響工時的因素}}' \
         '- 狀態清理結果：{{INPUT:回讀與刪除結果}}' \
-        '' \
-        '[{{INPUT:文件名稱}}]({{INPUT:相對連結}})' \
-        > "${skill_root}/assets/requirement-plan-template.md"
+        > "${skill_root}/assets/ai-collaboration-section-template.md"
 
     printf '%s\n' \
         '# {{INPUT:測試設計主題}}' \
@@ -857,7 +861,7 @@ rm "${heading_file}.bak"
 expect_fail "需求範本缺少變更紀錄" "${missing_change_heading_root}" "範本必填章節"
 
 missing_ai_metric_root="$(new_case missing-ai-metric)"
-metric_file="${missing_ai_metric_root}/skills/ai-development-workflow/assets/requirement-plan-template.md"
+metric_file="${missing_ai_metric_root}/skills/ai-development-workflow/assets/ai-collaboration-section-template.md"
 sed -i.bak '/^- 計量 ID：/d' "${metric_file}"
 rm "${metric_file}.bak"
 printf '%s\n' \
@@ -866,19 +870,25 @@ printf '%s\n' \
     '- 計量 ID：此內容只是程式碼區塊中的示例。' \
     '```' \
     >> "${metric_file}"
-expect_fail "需求範本缺少 AI 提效量化欄位" "${missing_ai_metric_root}" "AI 提效欄位"
+expect_fail "可選 AI 範本缺少提效量化欄位" "${missing_ai_metric_root}" "AI 提效欄位"
+
+missing_ai_coverage_root="$(new_case missing-ai-coverage)"
+coverage_file="${missing_ai_coverage_root}/skills/ai-development-workflow/assets/ai-collaboration-section-template.md"
+sed -i.bak '/^- 計量覆蓋度：/d' "${coverage_file}"
+rm "${coverage_file}.bak"
+expect_fail "可選 AI 範本缺少計量覆蓋度" "${missing_ai_coverage_root}" "AI 提效欄位"
 
 missing_timing_link_root="$(new_case missing-timing-link)"
-timing_link_file="${missing_timing_link_root}/skills/ai-development-workflow/assets/requirement-plan-template.md"
+timing_link_file="${missing_timing_link_root}/skills/ai-development-workflow/assets/ai-collaboration-section-template.md"
 sed -i.bak '/reference-timing\.md/d' "${timing_link_file}"
 rm "${timing_link_file}.bak"
-expect_fail "需求範本缺少參考計時連結" "${missing_timing_link_root}" "參考計時連結"
+expect_fail "可選 AI 範本缺少參考計時連結" "${missing_timing_link_root}" "參考計時連結"
 
 missing_ai_contribution_root="$(new_case missing-ai-contribution)"
-contribution_file="${missing_ai_contribution_root}/skills/ai-development-workflow/assets/requirement-plan-template.md"
+contribution_file="${missing_ai_contribution_root}/skills/ai-development-workflow/assets/ai-collaboration-section-template.md"
 sed -i.bak '/^- 需求規模：/d' "${contribution_file}"
 rm "${contribution_file}.bak"
-expect_fail "需求範本缺少 AI 可驗證貢獻欄位" "${missing_ai_contribution_root}" "AI 提效欄位"
+expect_fail "可選 AI 範本缺少可驗證貢獻欄位" "${missing_ai_contribution_root}" "AI 提效欄位"
 
 missing_requirement_bridge_field_root="$(new_case missing-requirement-bridge-field)"
 bridge_file="${missing_requirement_bridge_field_root}/skills/ai-development-workflow/assets/requirement-plan-template.md"
