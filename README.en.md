@@ -117,6 +117,7 @@ Open a new conversation after updating.
 ## Publication Validation
 
 ```bash
+python3 -m unittest discover -s tests -p "test_*.py" -v
 bash tests/test-validate-publication.sh
 bash scripts/validate-publication.sh
 ```

@@ -63,6 +63,7 @@ if root_has_symlink(root):
 skill_name = "ai-development-workflow"
 root_skill = root / "SKILL.md"
 skill_root = root if root_skill.exists() or root_skill.is_symlink() else root / "skills" / skill_name
+repository_mode = skill_root != root
 errors: set[tuple[str, str, int | None]] = set()
 
 
@@ -125,6 +126,18 @@ for required in required_files:
         add_error(candidate, "符號連結")
     elif not candidate.is_file():
         add_error(candidate, "必要結構")
+
+if repository_mode:
+    repository_required_files = [
+        "AGENTS.md",
+        ".agents/adr/0001-runtime-boundary.md",
+    ]
+    for required in repository_required_files:
+        candidate = root / required
+        if candidate.is_symlink():
+            add_error(candidate, "符號連結")
+        elif not candidate.is_file():
+            add_error(candidate, "必要倉庫結構")
 
 
 def parse_frontmatter_scalar(value: str) -> str | None:

@@ -41,10 +41,23 @@ create_valid_repo() {
     local skill_root="${root}/skills/ai-development-workflow"
 
     mkdir -p \
+        "${root}/.agents/adr" \
         "${skill_root}/agents" \
         "${skill_root}/references" \
         "${skill_root}/assets" \
         "${skill_root}/scripts"
+
+    printf '%s\n' \
+        '# Repository maintenance guide' \
+        '' \
+        'See the [runtime decision](.agents/adr/0001-runtime-boundary.md).' \
+        > "${root}/AGENTS.md"
+
+    printf '%s\n' \
+        '# 0001: Keep timing optional' \
+        '' \
+        'The core workflow remains available without the timing helper.' \
+        > "${root}/.agents/adr/0001-runtime-boundary.md"
 
     printf '%s\n' \
         '---' \
@@ -323,6 +336,15 @@ new_case() {
 
 valid_root="$(new_case valid-repo)"
 expect_pass "正常倉庫" "${valid_root}"
+expect_pass "獨立 Skill 目錄" "${valid_root}/skills/ai-development-workflow"
+
+missing_agents_root="$(new_case missing-agents)"
+rm "${missing_agents_root}/AGENTS.md"
+expect_safe_failure "缺少倉庫維護指南" "${missing_agents_root}" "必要倉庫結構"
+
+missing_runtime_adr_root="$(new_case missing-runtime-adr)"
+rm "${missing_runtime_adr_root}/.agents/adr/0001-runtime-boundary.md"
+expect_safe_failure "缺少執行環境決策紀錄" "${missing_runtime_adr_root}" "必要倉庫結構"
 
 safe_root="$(new_case safe-file)"
 printf '%s\n' '# 公開說明' '' '這是不含敏感資訊的安全內容。' > "${safe_root}/SAFE.md"
