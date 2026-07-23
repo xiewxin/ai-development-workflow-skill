@@ -186,9 +186,13 @@ def build_parser() -> SafeArgumentParser:
     enter.add_argument("--id", required=True)
     enter.add_argument("--phase", choices=PHASES, required=True)
 
-    for command in ("pause", "resume", "status"):
+    for command in ("pause", "status"):
         child = subparsers.add_parser(command)
         child.add_argument("--id", required=True)
+
+    resume = subparsers.add_parser("resume")
+    resume.add_argument("--id", required=True)
+    resume.add_argument("--new-turn", action="store_true")
 
     recover = subparsers.add_parser("recover")
     recover.add_argument("--id", required=True)
@@ -197,6 +201,11 @@ def build_parser() -> SafeArgumentParser:
     complete = subparsers.add_parser("complete")
     complete.add_argument("--id", required=True)
     complete.add_argument("--mixed-work", choices=("no", "yes", "unknown"), required=True)
+    complete.add_argument(
+        "--coverage",
+        choices=("complete", "partial", "unknown"),
+        default="unknown",
+    )
 
     delete = subparsers.add_parser("delete")
     delete.add_argument("--id", required=True)
@@ -410,6 +419,8 @@ def validate_anomalies(value: Any) -> None:
         "open_interval_excluded",
         "activitywatch_fallback",
         "baseline_fingerprint_mismatch",
+        "coverage_partial",
+        "coverage_unknown",
         "mixed_work_yes",
         "mixed_work_unknown",
     }
@@ -482,6 +493,7 @@ def validate_completed_summary(value: Any, state: dict[str, Any]) -> None:
         "confidence",
         "anomalies",
         "mixed_work",
+        "coverage",
     }
     efficiency_keys = {
         "baseline_seconds",
@@ -504,17 +516,31 @@ def validate_completed_summary(value: Any, state: dict[str, Any]) -> None:
         or value["confidence"] != state["confidence"]
         or value["anomalies"] != state["anomalies"]
         or value["mixed_work"] not in ("no", "yes", "unknown")
+        or value["coverage"] not in ("complete", "partial", "unknown")
     ):
         corrupt_state()
     expected_mixed_anomaly = (
         None if value["mixed_work"] == "no" else f"mixed_work_{value['mixed_work']}"
     )
     mixed_anomalies = {"mixed_work_yes", "mixed_work_unknown"} & anomalies
+    expected_coverage_anomaly = (
+        None if value["coverage"] == "complete" else f"coverage_{value['coverage']}"
+    )
+    coverage_anomalies = {"coverage_partial", "coverage_unknown"} & anomalies
     if (
         (expected_mixed_anomaly is None and mixed_anomalies)
         or (
             expected_mixed_anomaly is not None
             and mixed_anomalies != {expected_mixed_anomaly}
+        )
+        or (expected_coverage_anomaly is None and coverage_anomalies)
+        or (
+            expected_coverage_anomaly is not None
+            and coverage_anomalies != {expected_coverage_anomaly}
+        )
+        or (
+            "open_interval_excluded" in anomalies
+            and value["coverage"] != "partial"
         )
         or value["confidence"] != ("low" if anomalies else "medium")
     ):
@@ -540,10 +566,12 @@ def validate_completed_summary(value: Any, state: dict[str, Any]) -> None:
         float(baseline["locked_at"]),
     )
     fingerprint_matches = expected_fingerprint == baseline["fingerprint"]
-    if fingerprint_matches:
-        if not has_efficiency or "baseline_fingerprint_mismatch" in anomalies:
-            corrupt_state()
-    elif has_efficiency or "baseline_fingerprint_mismatch" not in anomalies:
+    should_have_efficiency = fingerprint_matches and value["coverage"] == "complete"
+    if fingerprint_matches and "baseline_fingerprint_mismatch" in anomalies:
+        corrupt_state()
+    if not fingerprint_matches and "baseline_fingerprint_mismatch" not in anomalies:
+        corrupt_state()
+    if has_efficiency != should_have_efficiency:
         corrupt_state()
     if not has_efficiency:
         return
@@ -910,10 +938,19 @@ def pause_action(current_time: float) -> Callable[[dict[str, Any]], dict[str, An
     return action
 
 
-def resume_action(current_time: float) -> Callable[[dict[str, Any]], dict[str, Any]]:
+def resume_action(
+    current_time: float,
+    new_turn: bool = False,
+) -> Callable[[dict[str, Any]], dict[str, Any]]:
     """建立 resume 狀態轉換。"""
     def action(state: dict[str, Any]) -> dict[str, Any]:
         if state["state"] == "running":
+            if not new_turn:
+                return brief_payload(state)
+            state["open"] = {"phase": state["phase"], "start": current_time}
+            if "open_interval_excluded" not in state["anomalies"]:
+                state["anomalies"].append("open_interval_excluded")
+            state["confidence"] = "low"
             return brief_payload(state)
         if state["state"] != "paused":
             raise MeasureError("invalid_transition", "目前狀態不能恢復")
@@ -1013,6 +1050,7 @@ def baseline_action(
 
 def complete_action(
     mixed_work: str,
+    coverage: str,
     activitywatch_url: str = ACTIVITYWATCH_DEFAULT_URL,
 ) -> Callable[[dict[str, Any]], dict[str, Any]]:
     """建立完成封存與聚合摘要。"""
@@ -1026,6 +1064,14 @@ def complete_action(
         if mixed_work != "no":
             confidence = "low"
             anomaly = f"mixed_work_{mixed_work}"
+            if anomaly not in anomalies:
+                anomalies.append(anomaly)
+        effective_coverage = (
+            "partial" if "open_interval_excluded" in anomalies else coverage
+        )
+        if effective_coverage != "complete":
+            confidence = "low"
+            anomaly = f"coverage_{effective_coverage}"
             if anomaly not in anomalies:
                 anomalies.append(anomaly)
         validate_intervals(state["intervals"])
@@ -1056,6 +1102,7 @@ def complete_action(
             "confidence": confidence,
             "anomalies": anomalies,
             "mixed_work": mixed_work,
+            "coverage": effective_coverage,
         }
         baseline = state.get("baseline")
         if isinstance(baseline, dict):
@@ -1069,7 +1116,7 @@ def complete_action(
                     anomalies.append("baseline_fingerprint_mismatch")
                 summary["confidence"] = confidence
                 summary["anomalies"] = anomalies
-            else:
+            elif effective_coverage == "complete":
                 baseline_seconds = int(baseline["seconds"])
                 saved_seconds = baseline_seconds - int(summary["seconds"])
                 summary.update(
@@ -1164,7 +1211,7 @@ def main(
             result = update_measurement(
                 state_dir,
                 arguments.id,
-                resume_action(current_time),
+                resume_action(current_time, arguments.new_turn),
             )
         elif arguments.command == "enter":
             result = update_measurement(
@@ -1184,6 +1231,7 @@ def main(
                 arguments.id,
                 complete_action(
                     arguments.mixed_work,
+                    arguments.coverage,
                     os.environ.get(
                         "AI_WORKFLOW_ACTIVITYWATCH_URL",
                         ACTIVITYWATCH_DEFAULT_URL,

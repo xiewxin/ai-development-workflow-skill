@@ -30,6 +30,7 @@ class OpenSourceDefaultsContractTest(unittest.TestCase):
             "### 可驗證貢獻",
             "### 效率量化",
             "計量 ID",
+            "計量覆蓋度",
             "人工參考基準與鎖定時間",
             "AI 協作參考耗時",
             "參考提效比例",
@@ -60,6 +61,19 @@ class OpenSourceDefaultsContractTest(unittest.TestCase):
             self.assertIn("預設關閉", content)
             self.assertIn("使用者明確要求", content)
         self.assertNotIn("完整流程預設啟用", timing)
+
+    def test_timing_uses_complete_coverage_and_never_calculates_tokens(self) -> None:
+        """時間提效只接受完整覆蓋，且不得收集或估算 Token。"""
+        skill = self.read("SKILL.md")
+        timing = self.read("references/reference-timing.md")
+        template = self.read("assets/ai-collaboration-section-template.md")
+        for content in (skill, timing, template):
+            self.assertIn("不收集", content)
+            self.assertIn("Token", content)
+        self.assertIn("--coverage complete", timing)
+        self.assertIn("續接回合的第一個計時動作", timing)
+        self.assertIn("等待使用者、CI 或外部佇列前", timing)
+        self.assertIn("計量覆蓋度", template)
 
     def test_test_design_uses_repository_language_policy(self) -> None:
         """測試設計語言需跟隨互動與 repo，不固定繁體。"""

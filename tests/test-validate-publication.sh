@@ -118,6 +118,7 @@ create_valid_repo() {
         '### 效率量化' \
         '- 計量 ID：{{INPUT:隨機 ID 或無}}' \
         '- 計量模式與資料來源：{{INPUT:模式與來源}}' \
+        '- 計量覆蓋度：{{INPUT:complete、partial 或 unknown}}' \
         '- 階段級 PERT：{{INPUT:五階段估算與依據}}' \
         '- 人工參考基準與鎖定時間：{{INPUT:基準與時間}}' \
         '- 基準指紋：{{INPUT:指紋或無}}' \
@@ -870,6 +871,12 @@ printf '%s\n' \
     '```' \
     >> "${metric_file}"
 expect_fail "可選 AI 範本缺少提效量化欄位" "${missing_ai_metric_root}" "AI 提效欄位"
+
+missing_ai_coverage_root="$(new_case missing-ai-coverage)"
+coverage_file="${missing_ai_coverage_root}/skills/ai-development-workflow/assets/ai-collaboration-section-template.md"
+sed -i.bak '/^- 計量覆蓋度：/d' "${coverage_file}"
+rm "${coverage_file}.bak"
+expect_fail "可選 AI 範本缺少計量覆蓋度" "${missing_ai_coverage_root}" "AI 提效欄位"
 
 missing_timing_link_root="$(new_case missing-timing-link)"
 timing_link_file="${missing_timing_link_root}/skills/ai-development-workflow/assets/ai-collaboration-section-template.md"

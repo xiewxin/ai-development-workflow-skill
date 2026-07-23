@@ -1,6 +1,6 @@
 ## AI 協作紀錄與成效
 
-本章節預設關閉；只有使用者明確要求 AI 成效／提效，或目標倉庫政策明確要求時，才附加到需求計畫。參考計時的啟用、基準、狀態與清理依[參考計時指南](../references/reference-timing.md)執行。
+本章節預設關閉；只有使用者明確要求 AI 成效／提效，或目標倉庫政策明確要求時，才附加到需求計畫。參考計時的啟用、基準、狀態與清理依[參考計時指南](../references/reference-timing.md)執行。效率只量化時間；不收集、不估算、不輸出 Token 用量。
 
 ### 可驗證貢獻
 
@@ -14,6 +14,7 @@
 
 - 計量 ID：{{INPUT:start 回傳的隨機 ID}}
 - 計量模式與資料來源：{{INPUT:啟用範圍，以及 complete 實際使用的 session｜ActivityWatch}}
+- 計量覆蓋度：{{INPUT:complete｜partial｜unknown、判定證據；非 complete 時不得計算節省工時或提效}}
 - 階段級 PERT：{{INPUT:五個固定階段的 O/M/P 整數秒、範圍、複用、測試、文件與風險依據；未鎖定時說明原因}}
 - 人工參考基準與鎖定時間：{{INPUT:PERT 總秒數、換算工時、實作前鎖定時間；無效時填未鎖定}}
 - 基準指紋：{{INPUT:baseline 與 complete 對帳的指紋；未鎖定時填無}}

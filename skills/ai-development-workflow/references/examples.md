@@ -55,6 +55,7 @@
 
 - 計量 ID：`0123456789abcdef0123456789abcdef`。
 - 計量模式與資料來源：完整流程；session。
+- 計量覆蓋度：`complete`；需求探索到文件／審查的 AI 工作均有閉合區間。
 - 階段級 PERT：`requirement_plan=1200/1800/2400`、`test_design=1200/1800/2400`、`implementation=7200/9000/10800`、`verification_fix=3000/3600/4200`、`docs_review=1200/1800/2400`；依已核准的四個檔案、現有服務複用、自動化測試與文件回填估算。
 - 人工參考基準與鎖定時間：18,000 秒（5 小時）；於虛構範例日 09:00、產品實作前鎖定。
 - 基準指紋：`aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`；`baseline` 與 `complete` 對帳一致。
@@ -69,12 +70,14 @@
 
 ### 無有效基準的回填
 
+- 計量覆蓋度：`complete`。
 - AI 協作參考耗時：5,400 秒（90 分鐘）；session 閉合區間。
 - 參考節省工時：無法計算；未在產品實作前鎖定 baseline。
 - 參考提效比例：無法計算；不填 `0%`。
 
 ### 負值與無法判定混入工作
 
+- 計量覆蓋度：`complete`。
 - 人工參考基準：7,200 秒（2 小時）。
 - AI 協作參考耗時：9,000 秒（2.5 小時）。
 - 參考節省工時：-1,800 秒（-0.5 小時）。
