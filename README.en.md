@@ -14,9 +14,9 @@ An open-source Agent Skill for Codex and Claude Code that provides a verifiable 
 
 ## Four Modes
 
-- **Requirement planning**: Define goals, boundaries, impact, reuse, risks, implementation slices, and acceptance criteria.
+- **Requirement planning**: Define goals, boundaries, impact, reuse, risks, implementation slices, and acceptance criteria. Existing relevant domain context and ADRs are read when present, but never created just to satisfy the workflow.
 - **Test design**: Cover applicable success, boundary, failure, and regression scenarios, then map them to automated and manual verification.
-- **Git diff review**: Reconcile the full change set against the approved scope and track findings with stable `REV-*` IDs and high, medium, or low severity.
+- **Git diff review**: Independently inspect Spec/scope compliance and Standards/engineering quality, then verify and deduplicate findings into stable `REV-*` IDs with high, medium, or low severity.
 - **Full workflow**: Plan, design tests, implement after approval, verify, update documentation, and review the final diff.
 
 AI collaboration metrics and local timing are disabled by default. They are enabled only when the user explicitly asks for them or the target repository requires them.
@@ -34,6 +34,7 @@ For Matt Pocock Skills, installation alone does not activate the provider. Exist
 ## Requirement Planning Features
 
 - Investigates discoverable facts before asking questions, then confirms only decisions that can change scope, contracts, architecture, test seams, or acceptance criteria.
+- Reads existing relevant domain context, context maps, and ADRs on demand, verifies them against current code, and does not create extra decision documents merely to fill a format.
 - Adds user-observable behavior and acceptance scenarios only when they help define the requirement; it does not generate long user-story lists to fill a template.
 - Chooses the highest stable user-observable public interface as the preferred test seam. If an existing lower-level test cannot verify the visible contract, a new test may be added at that public interface with approval.
 - Organizes work into independently verifiable vertical slices with blockers and completion criteria. Wide refactors use `expand → migrate → contract` with an integration gate.

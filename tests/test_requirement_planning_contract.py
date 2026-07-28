@@ -24,6 +24,23 @@ class RequirementPlanningContractTest(unittest.TestCase):
         ):
             self.assertIn(expected, guide)
 
+    def test_existing_domain_context_and_adrs_are_read_conditionally(self) -> None:
+        """既有領域脈絡與決策應按需驗證，缺少時不製造文件。"""
+        skill = self.read("SKILL.md")
+        guide = self.read("references/requirement-plan.md")
+        for content in (skill, guide):
+            for expected in ("CONTEXT.md", "CONTEXT-MAP.md", "ADR"):
+                self.assertIn(expected, content)
+        self.assertIn("不存在時不建立", skill)
+        self.assertIn("不存在時不建立", guide)
+        self.assertIn("不新增必填章節", guide)
+        self.assertIn("目前程式碼", guide)
+        scenarios = (ROOT / "tests" / "scenarios.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("情境二十五：領域決策與目前需求衝突", scenarios)
+        self.assertIn("不自動建立新的 CONTEXT、ADR", scenarios)
+
     def test_plan_template_uses_adaptive_behavior_scenarios(self) -> None:
         """只有適用時才展開使用者可觀察行為。"""
         skill = self.read("SKILL.md")

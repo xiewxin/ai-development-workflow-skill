@@ -41,6 +41,29 @@ class ReviewContractTest(unittest.TestCase):
         for priority in ("P0", "P1", "P2", "P3"):
             self.assertIn(priority, test_design)
 
+    def test_review_uses_two_independent_evidence_axes_and_one_rev_list(self) -> None:
+        """需求符合度與工程品質應獨立取證，再去重成單一清單。"""
+        skill = self.read("SKILL.md")
+        review = self.read("references/git-diff-review.md")
+        for expected in ("Spec／範圍", "Standards／工程品質"):
+            self.assertIn(expected, skill)
+            self.assertIn(expected, review)
+        for expected in (
+            "## 雙軸獨立取證",
+            "先各自形成候選證據",
+            "不要求子代理",
+            "單一 `REV-*` 清單",
+            "同一根因同時被兩軸發現時合併一項",
+            "任一軸沒有 finding 不是跳過另一軸的理由",
+        ):
+            self.assertIn(expected, review)
+        scenarios = (ROOT / "tests" / "scenarios.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("情境二十六：雙軸審查發現重疊與獨立問題", scenarios)
+        self.assertIn("兩軸循序執行即可", scenarios)
+        self.assertIn("不保留兩套問題編號", scenarios)
+
     def test_plan_change_sync_is_explicit(self) -> None:
         """計畫應區分事實更正、候選變更與已核准偏差。"""
         guide = self.read("references/requirement-plan.md")
