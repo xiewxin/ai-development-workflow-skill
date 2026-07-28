@@ -42,7 +42,9 @@ For Matt Pocock Skills, installation alone does not activate the provider. Exist
 
 - Timing is opt-in and records only time; it never collects, estimates, or reports token usage.
 - It uses short Python 3 standard-library commands and local session state, without a background service or cloud upload.
-- Productivity is calculated only when complete measured coverage and a valid pre-implementation PERT baseline match. Partial or unknown coverage reports measured time and anomalies without inventing a percentage.
+- A pre-implementation PERT baseline may cover the full requirement or, when timing is enabled late but before implementation, the next not-yet-started delivery phases. Excluded phases use `0/0/0`, and a remaining-scope result must not be presented as whole-requirement productivity.
+- Time savings are calculated only when the declared scope has complete measured coverage and a matching baseline. Reports label the formula as a reference time-saving percentage; partial or unknown coverage reports measured time and anomalies without inventing a percentage.
+- When an approved V2 or V3 scope is added after completion in the same conversation, it receives an independent measurement segment. Completed state is not resumed, and segments are not manually merged.
 - A new conversation does not search for, resume, or merge previous measurements.
 - ActivityWatch can be used only when already installed and explicitly selected. Failures fall back to session timing.
 

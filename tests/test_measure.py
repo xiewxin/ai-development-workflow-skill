@@ -70,15 +70,18 @@ class MeasureCliTest(unittest.TestCase):
         raw = output.getvalue().encode("utf-8")
         return exit_code, json.loads(raw), raw
 
-    def start(self, provider: str = "session") -> str:
+    def start(self, provider: str = "session", *, paused: bool = False) -> str:
         """建立計量並回傳 ID。"""
-        code, payload, _ = self.run_cli(
+        arguments = [
             "start",
             "--phase",
             "requirement_plan",
             "--provider",
             provider,
-        )
+        ]
+        if paused:
+            arguments.append("--paused")
+        code, payload, _ = self.run_cli(*arguments)
         self.assertEqual(0, code)
         return str(payload["id"])
 
@@ -195,6 +198,105 @@ class MeasureCliTest(unittest.TestCase):
         self.assertEqual([], list(self.state_dir.glob(f"{measurement_id}.*")))
         self.assertEqual(2, self.run_cli("status", "--id", measurement_id)[0])
         self.assertEqual([], list(self.state_dir.glob(f"{measurement_id}.*")))
+
+    def test_paused_start_locks_remaining_scope_before_implementation(self) -> None:
+        """中途啟用可先暫停建立實作階段，鎖定剩餘範圍後再計時。"""
+        code, payload, _ = self.run_cli(
+            "start",
+            "--phase",
+            "implementation",
+            "--provider",
+            "session",
+            "--paused",
+        )
+        self.assertEqual(0, code)
+        measurement_id = str(payload["id"])
+        self.assertEqual("paused", payload["state"])
+        estimates = [
+            "--estimate",
+            "requirement_plan=0,0,0",
+            "--estimate",
+            "test_design=0,0,0",
+            "--estimate",
+            "implementation=1800,2700,4200",
+            "--estimate",
+            "verification_fix=600,1200,2400",
+            "--estimate",
+            "docs_review=300,600,900",
+        ]
+        baseline = self.run_cli(
+            "baseline",
+            "--id",
+            measurement_id,
+            *estimates,
+        )[1]
+        self.assertEqual(4700, baseline["baseline_seconds"])
+        self.run_cli("resume", "--id", measurement_id)
+        self.clock.advance(1200)
+        self.run_cli("pause", "--id", measurement_id)
+        completed = self.run_cli(
+            "complete",
+            "--id",
+            measurement_id,
+            "--mixed-work",
+            "no",
+            "--coverage",
+            "complete",
+        )[1]
+        self.assertEqual(3500, completed["saved_seconds"])
+        self.assertEqual(74.47, completed["efficiency_percent"])
+
+    def test_time_outside_baseline_scope_suppresses_savings(self) -> None:
+        """落入零 PERT 階段的時間應使剩餘範圍失去可比性。"""
+        measurement_id = self.start(paused=True)
+        estimates = [
+            "--estimate",
+            "requirement_plan=0,0,0",
+            "--estimate",
+            "test_design=0,0,0",
+            "--estimate",
+            "implementation=1800,2700,4200",
+            "--estimate",
+            "verification_fix=600,1200,2400",
+            "--estimate",
+            "docs_review=300,600,900",
+        ]
+        self.run_cli("baseline", "--id", measurement_id, *estimates)
+        self.run_cli("resume", "--id", measurement_id)
+        self.clock.advance(10)
+        self.run_cli("pause", "--id", measurement_id)
+        completed = self.run_cli(
+            "complete",
+            "--id",
+            measurement_id,
+            "--mixed-work",
+            "no",
+        )[1]
+        self.assertEqual("partial", completed["coverage"])
+        self.assertIn("baseline_scope_mismatch", completed["anomalies"])
+        self.assertNotIn("saved_seconds", completed)
+        self.assertNotIn("efficiency_percent", completed)
+        status = self.run_cli("status", "--id", measurement_id)[1]
+        self.assertEqual("completed", status["state"])
+        self.assertIn("baseline_scope_mismatch", status["anomalies"])
+
+    def test_empty_paused_measurement_cannot_claim_full_savings(self) -> None:
+        """暫停建立後沒有任何區間時不得產生百分之百節省。"""
+        measurement_id = self.start(paused=True)
+        self.lock_baseline(measurement_id)
+        completed = self.run_cli(
+            "complete",
+            "--id",
+            measurement_id,
+            "--mixed-work",
+            "no",
+            "--coverage",
+            "complete",
+        )[1]
+        self.assertEqual("partial", completed["coverage"])
+        self.assertIn("measurement_empty", completed["anomalies"])
+        self.assertNotIn("saved_seconds", completed)
+        self.assertNotIn("efficiency_percent", completed)
 
     def test_missing_status_does_not_create_id_specific_state(self) -> None:
         """查詢不存在的 ID 不得留下可追蹤的專用檔案。"""

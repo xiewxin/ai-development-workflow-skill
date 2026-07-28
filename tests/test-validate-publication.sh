@@ -134,7 +134,9 @@ create_valid_repo() {
         '- 提前發現與避免返工：{{INPUT:具體問題與影響}}' \
         '- 人工決策與介入：{{INPUT:需由使用者確認的內容}}' \
         '### 效率量化' \
-        '- 計量 ID：{{INPUT:隨機 ID 或無}}' \
+        '- 量化結論：{{INPUT:可比較性與原因}}' \
+        '- 計量分段／ID：{{INPUT:分段與隨機 ID}}' \
+        '- 計量範圍：{{INPUT:完整需求或剩餘交付}}' \
         '- 計量模式與資料來源：{{INPUT:模式與來源}}' \
         '- 計量覆蓋度：{{INPUT:complete、partial 或 unknown}}' \
         '- 階段級 PERT：{{INPUT:五階段估算與依據}}' \
@@ -143,7 +145,7 @@ create_valid_repo() {
         '- AI 協作參考耗時：{{INPUT:聚合耗時}}' \
         '- 階段摘要：{{INPUT:五階段聚合}}' \
         '- 參考節省工時：{{INPUT:數值或無法計算}}' \
-        '- 參考提效比例：{{INPUT:百分比或無法計算}}' \
+        '- 參考工時節省比例：{{INPUT:百分比或無法計算}}' \
         '- 可信度：{{INPUT:中、低與依據}}' \
         '- 異常與混入工作：{{INPUT:異常、結論與影響}}' \
         '- 歸因限制：{{INPUT:其他可能影響工時的因素}}' \
@@ -890,12 +892,12 @@ expect_fail "需求範本缺少變更紀錄" "${missing_change_heading_root}" "�
 
 missing_ai_metric_root="$(new_case missing-ai-metric)"
 metric_file="${missing_ai_metric_root}/skills/ai-development-workflow/assets/ai-collaboration-section-template.md"
-sed -i.bak '/^- 計量 ID：/d' "${metric_file}"
+sed -i.bak '/^- 量化結論：/d' "${metric_file}"
 rm "${metric_file}.bak"
 printf '%s\n' \
     '' \
     '```markdown' \
-    '- 計量 ID：此內容只是程式碼區塊中的示例。' \
+    '- 量化結論：此內容只是程式碼區塊中的示例。' \
     '```' \
     >> "${metric_file}"
 expect_fail "可選 AI 範本缺少提效量化欄位" "${missing_ai_metric_root}" "AI 提效欄位"

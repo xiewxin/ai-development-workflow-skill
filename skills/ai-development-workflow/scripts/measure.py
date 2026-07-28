@@ -177,6 +177,7 @@ def build_parser() -> SafeArgumentParser:
     start = subparsers.add_parser("start")
     start.add_argument("--phase", choices=PHASES, required=True)
     start.add_argument("--provider", choices=("session", "activitywatch"), default="session")
+    start.add_argument("--paused", action="store_true")
 
     baseline = subparsers.add_parser("baseline")
     baseline.add_argument("--id", required=True)
@@ -419,8 +420,10 @@ def validate_anomalies(value: Any) -> None:
         "open_interval_excluded",
         "activitywatch_fallback",
         "baseline_fingerprint_mismatch",
+        "baseline_scope_mismatch",
         "coverage_partial",
         "coverage_unknown",
+        "measurement_empty",
         "mixed_work_yes",
         "mixed_work_unknown",
     }
@@ -540,6 +543,14 @@ def validate_completed_summary(value: Any, state: dict[str, Any]) -> None:
         )
         or (
             "open_interval_excluded" in anomalies
+            and value["coverage"] != "partial"
+        )
+        or (
+            "baseline_scope_mismatch" in anomalies
+            and value["coverage"] != "partial"
+        )
+        or (
+            "measurement_empty" in anomalies
             and value["coverage"] != "partial"
         )
         or value["confidence"] != ("low" if anomalies else "medium")
@@ -888,8 +899,14 @@ def close_open_interval(state: dict[str, Any], current_time: float) -> None:
     state["open"] = None
 
 
-def start_measurement(state_dir: Path, phase: str, provider: str, current_time: float) -> dict[str, Any]:
-    """建立新的 running 計量狀態。"""
+def start_measurement(
+    state_dir: Path,
+    phase: str,
+    provider: str,
+    current_time: float,
+    paused: bool = False,
+) -> dict[str, Any]:
+    """建立新的計量狀態，必要時先保持暫停以鎖定剩餘範圍基準。"""
     measurement_id = uuid.uuid4().hex
     path = state_path(state_dir, measurement_id)
     with measurement_lock(state_dir, measurement_id, require_state=False):
@@ -897,9 +914,9 @@ def start_measurement(state_dir: Path, phase: str, provider: str, current_time: 
             "version": SCHEMA_VERSION,
             "id": measurement_id,
             "provider": provider,
-            "state": "running",
+            "state": "paused" if paused else "running",
             "phase": phase,
-            "open": {"phase": phase, "start": current_time},
+            "open": None if paused else {"phase": phase, "start": current_time},
             "intervals": [],
             "baseline": None,
             "anomalies": [],
@@ -1093,6 +1110,26 @@ def complete_action(
                 confidence = "low"
                 if "activitywatch_fallback" not in anomalies:
                     anomalies.append("activitywatch_fallback")
+        baseline = state.get("baseline")
+        scope_mismatch = isinstance(baseline, dict) and any(
+            baseline["phase_seconds"][phase] == 0 and by_phase[phase] > 0
+            for phase in PHASES
+        )
+        empty_measurement = isinstance(baseline, dict) and sum(by_phase.values()) == 0
+        if scope_mismatch or empty_measurement:
+            confidence = "low"
+            effective_coverage = "partial"
+            anomalies = [
+                anomaly
+                for anomaly in anomalies
+                if anomaly not in ("coverage_partial", "coverage_unknown")
+            ]
+            if scope_mismatch and "baseline_scope_mismatch" not in anomalies:
+                anomalies.append("baseline_scope_mismatch")
+            if empty_measurement and "measurement_empty" not in anomalies:
+                anomalies.append("measurement_empty")
+            if "coverage_partial" not in anomalies:
+                anomalies.append("coverage_partial")
         summary: dict[str, Any] = {
             "id": state["id"],
             "state": "completed",
@@ -1104,7 +1141,6 @@ def complete_action(
             "mixed_work": mixed_work,
             "coverage": effective_coverage,
         }
-        baseline = state.get("baseline")
         if isinstance(baseline, dict):
             expected_fingerprint = calculate_baseline_fingerprint(
                 baseline["estimates"],
@@ -1200,6 +1236,7 @@ def main(
                 arguments.phase,
                 arguments.provider,
                 current_time,
+                arguments.paused,
             )
         elif arguments.command == "pause":
             result = update_measurement(
