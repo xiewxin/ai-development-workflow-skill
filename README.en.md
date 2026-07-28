@@ -36,6 +36,8 @@ For Matt Pocock Skills, installation alone does not activate the provider. Exist
 - Investigates discoverable facts before asking questions, then confirms only decisions that can change scope, contracts, architecture, test seams, or acceptance criteria.
 - Reads existing relevant domain context, context maps, and ADRs on demand, verifies them against current code, and does not create extra decision documents merely to fill a format.
 - Adds user-observable behavior and acceptance scenarios only when they help define the requirement; it does not generate long user-story lists to fill a template.
+- Uses a compact profile for small single-repository work without external artifacts or high-spread risk: six core plan headings and five core test-design headings. Complex work expands the full field catalog only when needed.
+- Connects acceptance, slices, scenarios, data, and execution through `AC-* → S-* → T-* → D-* / RUN-*`. Concrete commands and per-scenario results have one owner in the test design instead of drifting across documents.
 - Chooses the highest stable user-observable public interface as the preferred test seam. If an existing lower-level test cannot verify the visible contract, a new test may be added at that public interface with approval.
 - Organizes work into independently verifiable vertical slices with blockers and completion criteria. Wide refactors use `expand → migrate → contract` with an integration gate.
 
