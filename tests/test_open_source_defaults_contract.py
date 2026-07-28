@@ -33,11 +33,13 @@ class OpenSourceDefaultsContractTest(unittest.TestCase):
             "../references/reference-timing.md",
             "### 可驗證貢獻",
             "### 效率量化",
-            "計量 ID",
+            "量化結論",
+            "計量分段／ID",
+            "計量範圍",
             "計量覆蓋度",
             "人工參考基準與鎖定時間",
             "AI 協作參考耗時",
-            "參考提效比例",
+            "參考工時節省比例",
             "歸因限制",
             "狀態清理結果",
         ):
@@ -75,6 +77,10 @@ class OpenSourceDefaultsContractTest(unittest.TestCase):
             self.assertIn("不收集", content)
             self.assertIn("Token", content)
         self.assertIn("--coverage complete", timing)
+        self.assertIn("start --phase implementation --provider session --paused", timing)
+        self.assertIn("remaining_delivery", timing)
+        self.assertIn("同一對話中", timing)
+        self.assertIn("新的獨立計量 ID", timing)
         self.assertIn("續接回合的第一個計時動作", timing)
         self.assertIn("等待使用者、CI 或外部佇列前", timing)
         self.assertIn("計量覆蓋度", template)

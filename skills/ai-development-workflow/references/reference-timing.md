@@ -9,6 +9,7 @@
 - 使用者拒絕、Python 3 不可用、狀態目錄不安全或執行環境不適合時，關閉計時並繼續主流程；完結時標示無法計算參考提效。
 - 計時用於單一需求的參考與趨勢比較，不代表精確人工工時或 AI 的單一因果貢獻。
 - 本能力只量化時間；不收集、不估算、不輸出 Token 用量，也不以 Token 多寡推導效率。
+- 啟用時必須先在需求計畫宣告本段是 `full_requirement` 或 `remaining_delivery`。前者涵蓋整個需求；後者只涵蓋啟用後尚未開始的穩定階段，結果不得表述為整案提效。
 
 ## 執行入口與九個命令
 
@@ -16,6 +17,7 @@
 
 ```bash
 python3 scripts/measure.py start --phase requirement_plan --provider session
+python3 scripts/measure.py start --phase implementation --provider session --paused
 python3 scripts/measure.py baseline --id 0123456789abcdef0123456789abcdef \
   --estimate requirement_plan=1200,1800,2400 \
   --estimate test_design=1200,1800,2400 \
@@ -32,7 +34,7 @@ python3 scripts/measure.py status --id 0123456789abcdef0123456789abcdef
 python3 scripts/measure.py delete --id 0123456789abcdef0123456789abcdef
 ```
 
-- `start`：建立隨機計量 ID，鎖定 Provider 與初始階段。
+- `start`：建立隨機計量 ID，鎖定 Provider 與初始階段；`--paused` 不開啟計時區間，供剩餘交付範圍先鎖定 baseline。
 - `baseline`：在產品實作開始前，以五階段 PERT 鎖定人工參考基準與指紋。
 - `enter`：切換階段；running 時會同時閉合前一區間。
 - `pause`：閉合目前區間，每個 AI 回合結束前，以及等待使用者、CI 或外部佇列前執行。
@@ -78,16 +80,26 @@ python3 scripts/measure.py delete --id 0123456789abcdef0123456789abcdef
 - `baseline` 只能在產品實作階段尚未開始時首次鎖定。相同數值重送為無作用；鎖定後不得依實際結果修改。
 - 指紋由正規化 PERT 與鎖定時間產生。完結時指紋不一致，只保留參考耗時，不計算節省工時或比例。
 
+## 計量範圍
+
+- `full_requirement`：在需求探索開始前啟用，五個階段按實際範圍估算與計時。
+- `remaining_delivery`：中途啟用但產品實作尚未開始時使用。選擇下一個完全尚未開始的穩定階段作為範圍起點；已開始或已完成的階段全部排除，PERT 固定傳 `0,0,0`。
+- 若第一個納入階段是 `implementation`，以 `start --phase implementation --paused` 建立狀態，先寫入並鎖定剩餘範圍 PERT，再 `resume` 開始計時。不得先開始實作再倒推。
+- `remaining_delivery` 的 `complete` 只表示宣告範圍內無漏記；報告使用「剩餘交付範圍參考工時節省比例」，同時明確寫明整案提效無法計算。
+- 產品實作已開始後才啟用時，不再建立可比較 baseline；只記錄後續參考耗時與定性貢獻。
+
 ## 計量覆蓋度
 
-- `complete`：從需求探索、計畫、實作、驗證到文件／審查的實際 AI 工作都已納入，且沒有已知漏記區間。
-- `partial`：中途才開始、續接時漏恢復、排除未閉合區間，或已知有部分 AI 工作未納入。
+- `complete`：宣告計量範圍內的實際 AI 工作都已納入，且沒有已知漏記區間。範圍外階段不影響本段覆蓋度。
+- `partial`：宣告範圍內中途才開始、續接時漏恢復、排除未閉合區間，或已知有部分 AI 工作未納入。
 - `unknown`：證據不足，無法確認是否完整；未傳 `--coverage` 時安全預設為此值。
 - `partial` 或 `unknown` 只輸出實際記錄的耗時、可信度與異常，不計算節省工時或提效。存在 `open_interval_excluded` 時，即使傳入 `complete` 也會降為 `partial`。
+- 若任何計時落入 PERT 為 `0/0/0` 的範圍外階段，工具記錄 `baseline_scope_mismatch` 並降為 `partial`，避免用超出 baseline 的耗時產生比例。
+- 已鎖定 baseline 但沒有任何閉合計時區間時，工具記錄 `measurement_empty` 並降為 `partial`，不得產生百分之百節省。
 
 ## 每回合的低成本流程
 
-1. 首次進入完整流程執行 `start --phase requirement_plan`，把回傳 ID 寫入之後建立的需求計畫。
+1. 啟用時先在需求計畫記錄範圍。完整需求執行 `start --phase requirement_plan`；剩餘交付範圍執行 `start --phase <第一個納入階段> --paused`，把回傳 ID 與範圍一起寫入計畫。
 2. 階段切換執行 `enter`；每個 AI 回合交回使用者前，以及等待使用者、CI 或外部佇列前執行 `pause`。等待結束且仍在同一回合時執行普通 `resume`。
 3. 同一對話續接回合的第一個計時動作，直接以已持有 ID 執行 `resume --new-turn`，再開始倉庫探索或工具工作；不先以可被遺漏的 `status → resume` 兩步驟取代它。
 4. 計畫核准且實作前，先把 PERT 依據與數值寫入需求計畫，再執行 `baseline`。
@@ -98,9 +110,16 @@ python3 scripts/measure.py delete --id 0123456789abcdef0123456789abcdef
 
 - `mixed-work=yes` 或 `unknown` 一律降為低可信度，不以手工扣除秒數掩蓋問題。
 - 未閉合區間不直接計到當下；只能排除並記錄 `open_interval_excluded`。
-- 中途啟用、漏記回合或排除未閉合區間時使用 `coverage=partial`；無法證明完整時使用 `unknown`，兩者都不得計算整體提效。
+- 中途啟用但未宣告 `remaining_delivery`，或宣告範圍內漏記回合、排除未閉合區間時使用 `coverage=partial`；無法證明完整時使用 `unknown`。兩者都不得計算該段節省工時。
 - 時間倒退、區間重疊、狀態損壞、指紋不一致或寫入失敗都不繼續猜測。
 - 新對話不搜尋、列舉、解析、繼續或合併舊計量。同一需求若必須換對話，本版不另建續接計量，最終標示無法計算整體參考提效。
+
+## 完成後新增範圍
+
+- 同一對話中，已完成需求後又核准 V2／V3 等新增範圍時，若本需求已明確啟用計量且使用者未停用，建立新的獨立計量 ID；不恢復或修改已刪除的舊狀態。
+- 每段獨立宣告 `full_requirement` 或 `remaining_delivery`、鎖定 PERT、完成及清理。計畫保留各段 ID、範圍、基準、覆蓋度與結果。
+- 不把不同分段的 session 區間、基準或比例手工合併。需要整體值但沒有單一完整範圍計量時，明確標示整體無法計算，仍可分別呈現有效分段。
+- 新對話仍不延續原本的啟用狀態，也不搜尋舊 ID。
 
 ## 本機狀態與隱私
 
@@ -120,9 +139,11 @@ python3 scripts/measure.py delete --id 0123456789abcdef0123456789abcdef
 
 ## 回填與清理
 
-`complete` 後將下列聚合欄位寫入需求計畫：計量 ID、模式與資料來源、計量覆蓋度、階段級 PERT、人工參考基準與鎖定時間、基準指紋、AI 協作參考耗時、階段摘要、參考節省工時、參考提效比例、可信度、異常與混入工作、歸因限制與狀態清理結果。
+`complete` 後先寫量化結論與可比性，再將下列聚合欄位寫入需求計畫：計量 ID／分段、計量範圍、模式與資料來源、計量覆蓋度、階段級 PERT、人工參考基準與鎖定時間、基準指紋、AI 協作參考耗時、階段摘要、參考節省工時、參考工時節省比例、可信度、異常與混入工作、歸因限制與狀態清理結果。
 
 - 缺少有效 baseline 時仍回填參考耗時，但節省工時與比例填「無法計算：未在實作前鎖定人工參考基準」。
 - 覆蓋度不是 `complete` 時仍回填已記錄耗時，但節省工時與比例填「無法計算：計量未完整覆蓋」。
+- 範圍不是 `full_requirement` 時，先寫「整案效率量化：無法計算」；有效的剩餘範圍結果另以範圍名稱呈現。
+- 不可比較時不把完整需求人工基準與局部 AI 耗時並列為主要成效；原始數值只放在診斷資訊並標示不可直接比較。
 - 結果為負值時如實保留，不改寫為提升；`unknown` 不得美化為無混入工作。
 - 先回讀需求計畫確認聚合值、ID 與指紋，再 `delete`。清理後不保留該 ID 的狀態或專用鎖檔，只以計畫中的聚合資料追溯，不宣稱可還原事件級明細。
