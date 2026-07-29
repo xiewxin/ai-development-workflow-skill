@@ -28,3 +28,14 @@
 - 異常與混入工作：{{INPUT:anomalies、mixed_work=no｜yes｜unknown 與影響；沒有則填無}}
 - 歸因限制：{{INPUT:參考值邊界，以及人員熟練度、需求清晰度、既有複用、離線工作與工作環境等影響}}
 - 狀態清理結果：{{INPUT:需求計畫回讀對帳結果，以及 delete 成功｜保留及原因}}
+
+### 多分段摘要（條件式）
+
+本節的啟用條件、逐段證據、聚合與例外規則，以[參考計時指南的「完成後新增範圍」](../references/reference-timing.md#完成後新增範圍)及[「回填與清理」](../references/reference-timing.md#回填與清理)為唯一依據。適用時使用下表；不適用時刪除本節。
+
+| 分段／ID | 範圍 | 計量模式與資料來源 | PERT 基準、鎖定／指紋 | AI 耗時／階段摘要 | 節省工時／比例 | 覆蓋度／可信度 | 異常／混入工作 | 清理結果 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| {{INPUT:分段名稱／完整 ID}} | {{INPUT:full_requirement｜remaining_delivery}} | {{INPUT:session｜ActivityWatch}} | {{INPUT:五階段 PERT、總秒數、鎖定時間／指紋}} | {{INPUT:總秒數／五階段秒數}} | {{INPUT:本段節省秒數／比例或不可比原因}} | {{INPUT:complete｜partial｜unknown／中｜低及依據}} | {{INPUT:anomalies／mixed_work 與影響}} | {{INPUT:回讀對帳與 delete 結果}} |
+
+- 共用歸因限制：{{INPUT:只寫各段共同適用的參考值邊界與外部影響；無共用內容時刪除}}
+- 分段詳情：{{INPUT:只展開表格無法完整表達的異常、partial／unknown、負值、特殊不可比原因或不同歸因邊界；沒有則刪除}}

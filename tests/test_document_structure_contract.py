@@ -52,6 +52,51 @@ class DocumentStructureContractTest(unittest.TestCase):
         ):
             self.assertIn(expected, guide)
 
+    def test_framework_managed_test_seam_requires_minimal_preflight(self) -> None:
+        """框架代理或載入期改寫類別應先驗證 runner 相容性與最小 seam。"""
+        guide = self.read("references/test-design.md")
+        for expected in (
+            "runner 設定",
+            "process isolation",
+            "AOP",
+            "代理生成",
+            "alias／overload mock",
+            "一個能證明 seam 可用的最小案例",
+            "取得實作核准後",
+        ):
+            self.assertIn(expected, guide)
+        self.assertIn("一般純函式", guide)
+        self.assertIn("不為形式增加預檢表", guide)
+        self.assertIn("測試設計階段不建立或執行測試程式碼", guide)
+
+    def test_multiple_measurement_segments_use_compact_non_aggregated_summary(
+        self,
+    ) -> None:
+        """多個有效計量分段應壓縮呈現但保留逐段證據與不可合併邊界。"""
+        timing = self.read("references/reference-timing.md")
+        template = self.read("assets/ai-collaboration-section-template.md")
+        for expected in (
+            "多分段摘要表",
+            "分段／完整 ID",
+            "不得以省略號、前後綴或短碼截斷",
+            "獨立的計量模式與資料來源",
+            "不得把模式／資料來源合併",
+            "不得省略",
+        ):
+            self.assertIn(expected, timing)
+        for expected in (
+            "多分段摘要（條件式）",
+            "參考計時指南的「完成後新增範圍」",
+            "「回填與清理」",
+            "| 範圍 | 計量模式與資料來源 |",
+            "session｜ActivityWatch",
+            "PERT 基準、鎖定／指紋",
+            "AI 耗時／階段摘要",
+            "覆蓋度／可信度",
+            "異常／混入工作",
+        ):
+            self.assertIn(expected, template)
+
     def test_decision_and_delivery_statuses_are_independent(self) -> None:
         """文件核准與執行進度不得再共用一個含混狀態。"""
         plan = self.read("assets/requirement-plan-template.md")
