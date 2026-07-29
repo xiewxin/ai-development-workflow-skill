@@ -62,10 +62,12 @@ class DocumentStructureContractTest(unittest.TestCase):
             "代理生成",
             "alias／overload mock",
             "一個能證明 seam 可用的最小案例",
+            "取得實作核准後",
         ):
             self.assertIn(expected, guide)
         self.assertIn("一般純函式", guide)
         self.assertIn("不為形式增加預檢表", guide)
+        self.assertIn("測試設計階段不建立或執行測試程式碼", guide)
 
     def test_multiple_measurement_segments_use_compact_non_aggregated_summary(
         self,
@@ -83,12 +85,11 @@ class DocumentStructureContractTest(unittest.TestCase):
         ):
             self.assertIn(expected, timing)
         for expected in (
-            "兩段以上時取代逐段重複清單",
-            "不得加總不同分段",
-            "計量 ID 必須完整輸出",
-            "完整 ID，不得截斷",
+            "多分段摘要（條件式）",
+            "參考計時指南的「完成後新增範圍」",
+            "「回填與清理」",
             "| 範圍 | 計量模式與資料來源 |",
-            "session｜ActivityWatch；逐段必填",
+            "session｜ActivityWatch",
             "PERT 基準、鎖定／指紋",
             "AI 耗時／階段摘要",
             "覆蓋度／可信度",
