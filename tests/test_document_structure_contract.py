@@ -140,10 +140,24 @@ class DocumentStructureContractTest(unittest.TestCase):
         for content in (plan, test_design):
             self.assertIn("原生模式", content)
             self.assertIn("外部 Provider 映射（條件式", content)
+            self.assertIn("需求級工作流所有者", content)
+            self.assertIn("階段能力執行者", content)
             self.assertIn("唯一可寫所有者", content)
         self.assertIn("只有存在活動外部產物時才展開橋接映射", guide)
         for expected in ("Matt Pocock Skills", "`to-spec`", "`to-tickets`"):
             self.assertIn(expected, integration)
+
+    def test_orchestration_does_not_add_persistent_plan_structure_by_default(
+        self,
+    ) -> None:
+        """內部能力匹配不得讓每份需求計畫增加常駐編排欄位。"""
+        plan = self.read("assets/requirement-plan-template.md")
+        orchestration = self.read("references/skill-orchestration.md")
+        for internal in ("階段能力快照", "候選排名", "淘汰候選"):
+            self.assertNotIn(internal, plan)
+        self.assertNotIn("跨任務 Skill 交接", plan)
+        self.assertIn("使用者關切門檻", orchestration)
+        self.assertIn("不得為保存這些資訊新增常駐計畫章節或預設欄位", orchestration)
 
     def test_ai_effectiveness_remains_separate_from_delivery_results(self) -> None:
         """AI 成效不得混入一般實作與驗證結果。"""

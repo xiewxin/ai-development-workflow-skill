@@ -114,6 +114,7 @@ required_files = [
     "references/git-diff-review.md",
     "references/examples.md",
     "references/reference-timing.md",
+    "references/skill-orchestration.md",
     "references/workflow-integration.md",
     "assets/requirement-plan-template.md",
     "assets/ai-collaboration-section-template.md",
@@ -131,6 +132,7 @@ if repository_mode:
     repository_required_files = [
         "AGENTS.md",
         ".agents/adr/0001-runtime-boundary.md",
+        ".agents/adr/0002-exitable-development-delivery-coordinator.md",
     ]
     for required in repository_required_files:
         candidate = root / required
@@ -292,8 +294,13 @@ def handle_walk_error(error: OSError) -> None:
 
 
 def all_files() -> list[Path]:
-    """List every working-tree file while excluding only Git metadata."""
+    """List public files, excluding repository-only process artifacts."""
     found: list[Path] = []
+    process_artifact_roots = (
+        {root / "docs" / "plans", root / "docs" / "specs"}
+        if repository_mode
+        else set()
+    )
     for current, directories, filenames in os.walk(root, onerror=handle_walk_error):
         retained_directories: list[str] = []
         for name in sorted(directories):
@@ -302,6 +309,8 @@ def all_files() -> list[Path]:
             path = Path(current) / name
             if path.is_symlink():
                 add_error(path, "符號連結")
+                continue
+            if path in process_artifact_roots:
                 continue
             retained_directories.append(name)
         directories[:] = retained_directories
@@ -528,7 +537,8 @@ validate_section_fields(
     skill_root / "assets" / "requirement-plan-template.md",
     "Provider 橋接",
     [
-        "主 Provider",
+        "需求級工作流所有者",
+        "階段能力執行者",
         "產物定位",
         "唯一可寫所有者",
         "完整性",
@@ -618,7 +628,8 @@ validate_section_fields(
     skill_root / "assets" / "test-design-template.md",
     "Provider 橋接",
     [
-        "主 Provider",
+        "需求級工作流所有者",
+        "階段能力執行者",
         "產物定位",
         "唯一可寫所有者",
         "完整性",

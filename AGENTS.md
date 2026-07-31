@@ -12,6 +12,7 @@ This repository publishes the `ai-development-workflow` Agent Skill.
 ## Maintainer guide index
 
 - [`.agents/adr/0001-runtime-boundary.md`](.agents/adr/0001-runtime-boundary.md) records why timing remains an optional Python helper.
+- [`.agents/adr/0002-exitable-development-delivery-coordinator.md`](.agents/adr/0002-exitable-development-delivery-coordinator.md) records why external Skills remain optional stage capabilities and orchestration exits when a direct workflow is sufficient.
 - Add a focused child guide only when a repeated, non-obvious maintenance rule would otherwise make this root guide unstable or overly detailed.
 - Keep business walkthroughs, temporary plans, release history, and one-off implementation notes out of maintainer guidance.
 

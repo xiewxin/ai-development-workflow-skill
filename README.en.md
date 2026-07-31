@@ -23,13 +23,19 @@ AI collaboration metrics and local timing are disabled by default. They are enab
 
 ## External Workflow Integration
 
-- Uses verifiable evidence from the current conversation, repository rules, and active artifacts to integrate with Superpowers, Matt Pocock Skills, Spec Kit, OpenSpec, BMAD, or another provider with clear capabilities and ownership.
-- Selects one requirement-level primary provider. Secondary providers may only fill independent gaps without duplicating artifact ownership.
-- Keeps one writable owner for each external artifact. This Skill records its locator, state, gaps, and synchronization result instead of copying a complete spec, plan, or ticket set.
-- Works independently when no external provider is active. An optional provider failure degrades only the affected capability and is never reported as a pass.
-- Never installs, initializes, archives, publishes, or performs remote writes through an external workflow without the required authorization.
+- The four modes remain a complete native path. External capabilities are evaluated during requirement planning, test design, implementation, verification and repair, documentation sync, and Git diff review only after the user enters a mode or explicitly requests cross-Skill delivery coordination.
+- Capabilities have two inputs. Proactive discovery reads only the Skill catalog metadata provided by the platform for the current task. An explicit invocation context accepts a capability the user has already invoked through the platform without rediscovering, ranking, or invoking it again. Discovery is not activation, and neither input scans local Skills or treats installation state, brands, or names as capability evidence.
+- With zero, one, or multiple capabilities pending verification, the fast path falls back immediately, avoids a fake comparison, or expands only the current highest-priority group. Metadata filtering does not itself create a candidate; authorization, side effects, ownership, mandatory contracts, and verifiable value remain required on every path.
+- Candidates must pass availability, invocation-mode, authorization, side-effect, artifact-ownership, and mandatory-contract gates before verifiable value and a consistent priority order can select one. The native workflow remains silent and complete when none qualify.
+- Model-invoked capabilities follow the platform contract. A User-invoked capability produces one currently executable handoff action and pauses; the returned artifact is revalidated before work resumes. The README does not maintain a static third-party command catalog.
+- Each requirement has at most one requirement-level workflow owner. Stage capability executors fill independent slots without taking unrelated artifact ownership, and every formal artifact keeps one writable owner.
+- The cross-provider composition rule permits only non-overlapping capability slots or an explicit upstream/downstream relationship. One primary executor owns each slot or indivisible bundle, and every cross-provider edge requires a lightweight artifact handoff contract.
+- An approved plan is not sent to a ticket generator by default. Task-ordering handoff is useful only when long-lived tracking, complex collaboration, or an external tracker adds verifiable value.
+- Orchestration details are shown or persisted only when the user must act, grant additional authorization, resolve an artifact conflict, or safely resume across tasks. Internal snapshots, rankings, and rejected candidates do not become plan fields.
+- When one external workflow safely and completely covers the request, this Skill exits extra orchestration. Failures degrade according to actual side effects and are never reported as provider success.
+- The integration never installs, sets up, initializes, commits, archives, deletes, performs remote writes, or publishes without explicit authorization.
 
-For Matt Pocock Skills, installation alone does not activate the provider. Existing `to-spec` or `to-tickets` artifacts can own their approved content, while this Skill fills planning and verification gaps. A workflow such as `implement` that may create a commit also requires separate commit authorization.
+For Matt Pocock Skills, installation alone does not create a candidate. Existing `to-spec` or `to-tickets` artifacts may retain their approved ownership, while `to-tickets` remains conditional and User-invoked. A workflow such as `implement` that may create a commit is ineligible without separate commit authorization.
 
 ## Requirement Planning Features
 
@@ -101,7 +107,8 @@ cp -R skills/ai-development-workflow ~/.claude/skills/ai-development-workflow
 - “Create a requirement plan for this change, but do not implement it yet.”
 - “Create a test design from the approved plan, including test data and regression scope.”
 - “Review the complete Git diff against the target branch.”
-- “Complete this feature using the full workflow and pause at every approval gate.”
+- “Use the full workflow for this request. If the current platform provides a collaboration Skill with verifiable value, give me one explicit handoff only when I need to act or authorize it.”
+- “Complete this feature using the full workflow, and pause for plan approval, required user actions, additional authorization, or conflict resolution.”
 
 ## Updating
 
@@ -127,7 +134,7 @@ bash tests/test-validate-publication.sh
 bash scripts/validate-publication.sh
 ```
 
-The validator checks the public working tree, excluding `.git` and `.idea`, for the Skill structure, metadata, timing script, relative Markdown links, required template fields, Traditional Chinese repository documents, and likely sensitive information. It reports only file paths, rules, and necessary line numbers, without echoing matched content.
+In repository mode, the validator checks the public working tree while excluding `.git`, `.idea`, and the explicitly Git-ignored process-artifact directories `docs/plans/` and `docs/specs/`. Similar public directories remain in scope. It validates the Skill structure, metadata, timing script, relative Markdown links, required template fields, Traditional Chinese repository documents, and likely sensitive information, reporting only file paths, rules, and necessary line numbers without echoing matched content.
 
 The Skill's interaction language follows the user. Generated files and code follow the target repository's rules and nearby conventions. The Traditional Chinese publication check protects this repository's public Chinese documents and does not impose that language on target repositories.
 

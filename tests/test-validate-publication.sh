@@ -51,6 +51,7 @@ create_valid_repo() {
         '# Repository maintenance guide' \
         '' \
         'See the [runtime decision](.agents/adr/0001-runtime-boundary.md).' \
+        'See the [orchestration decision](.agents/adr/0002-exitable-development-delivery-coordinator.md).' \
         > "${root}/AGENTS.md"
 
     printf '%s\n' \
@@ -58,6 +59,12 @@ create_valid_repo() {
         '' \
         'The core workflow remains available without the timing helper.' \
         > "${root}/.agents/adr/0001-runtime-boundary.md"
+
+    printf '%s\n' \
+        '# 0002: Keep orchestration exitable' \
+        '' \
+        'External capabilities remain optional and Provider-neutral.' \
+        > "${root}/.agents/adr/0002-exitable-development-delivery-coordinator.md"
 
     printf '%s\n' \
         '---' \
@@ -87,6 +94,7 @@ create_valid_repo() {
     printf '%s\n' '# 差異審查' > "${skill_root}/references/git-diff-review.md"
     printf '%s\n' '# 虛構範例' > "${skill_root}/references/examples.md"
     printf '%s\n' '# 參考計時' '' '只保存虛構聚合資料。' > "${skill_root}/references/reference-timing.md"
+    printf '%s\n' '# Skill 編排合同' '' '只依平台本輪提供的虛構 catalog metadata。' > "${skill_root}/references/skill-orchestration.md"
     printf '%s\n' '# 外部工作流整合' '' '只保存虛構 Provider 橋接規則。' > "${skill_root}/references/workflow-integration.md"
     printf '%s\n' \
         '#!/usr/bin/env python3' \
@@ -97,10 +105,10 @@ create_valid_repo() {
         '# {{INPUT:需求主題}}' \
         '## 基本資訊／狀態' \
         '## Provider 橋接' \
-        '- 主 Provider：{{INPUT:Provider 或原生}}' \
-        '| 產物定位 | 完整性 | 唯一可寫所有者 | 同步結果 |' \
-        '| --- | --- | --- | --- |' \
-        '| {{INPUT:相對路徑或識別字}} | {{INPUT:完整性}} | {{INPUT:所有者}} | {{INPUT:同步結果}} |' \
+        '- 需求級工作流所有者：{{INPUT:工作流或原生}}' \
+        '| 階段能力執行者 | 產物定位 | 完整性 | 唯一可寫所有者 | 同步結果 |' \
+        '| --- | --- | --- | --- | --- |' \
+        '| {{INPUT:執行者或原生}} | {{INPUT:相對路徑或識別字}} | {{INPUT:完整性}} | {{INPUT:所有者}} | {{INPUT:同步結果}} |' \
         '## 需求來源與目標' \
         '### 行為與驗收場景（僅適用時保留）' \
         '## 範圍與非範圍' \
@@ -156,10 +164,10 @@ create_valid_repo() {
         '# {{INPUT:測試設計主題}}' \
         '## 基本資訊／關聯' \
         '## Provider 橋接' \
-        '- 主 Provider：{{INPUT:Provider 或原生}}' \
-        '| 產物定位 | 完整性 | 唯一可寫所有者 | 同步結果 |' \
-        '| --- | --- | --- | --- |' \
-        '| {{INPUT:相對路徑或識別字}} | {{INPUT:完整性}} | {{INPUT:所有者}} | {{INPUT:同步結果}} |' \
+        '- 需求級工作流所有者：{{INPUT:工作流或原生}}' \
+        '| 階段能力執行者 | 產物定位 | 完整性 | 唯一可寫所有者 | 同步結果 |' \
+        '| --- | --- | --- | --- | --- |' \
+        '| {{INPUT:執行者或原生}} | {{INPUT:相對路徑或識別字}} | {{INPUT:完整性}} | {{INPUT:所有者}} | {{INPUT:同步結果}} |' \
         '## 範圍與策略' \
         '- 測試 seam：{{INPUT:最高且穩定的公開介面}}' \
         '## 環境與依賴' \
@@ -624,6 +632,19 @@ local_path='/Users/'"example"'/workspace'
 printf '%s\n' "${local_path}" > "${local_path_root}/unsafe.txt"
 expect_fail "本機家目錄路徑" "${local_path_root}"
 
+process_artifact_root="$(new_case process-artifact-boundary)"
+mkdir -p \
+    "${process_artifact_root}/docs/plans/private" \
+    "${process_artifact_root}/docs/specs"
+printf '%s\n' "${local_path}" > "${process_artifact_root}/docs/plans/private/raw-events.jsonl"
+printf '%s\n' "${local_path}" > "${process_artifact_root}/docs/specs/local-note.md"
+expect_pass "忽略明確過程產物目錄" "${process_artifact_root}"
+
+public_lookalike_root="$(new_case public-lookalike-boundary)"
+mkdir -p "${public_lookalike_root}/docs/planning"
+printf '%s\n' "${local_path}" > "${public_lookalike_root}/docs/planning/public-note.md"
+expect_fail "相似公開目錄仍受檢查" "${public_lookalike_root}" "本機家目錄路徑"
+
 private_ip_root="$(new_case private-ip)"
 private_ip='10''.''20''.''30''.''40'
 printf '%s\n' "${private_ip}" > "${private_ip_root}/unsafe.txt"
@@ -844,6 +865,10 @@ missing_structure_root="$(new_case missing-structure)"
 rm "${missing_structure_root}/skills/ai-development-workflow/references/examples.md"
 expect_fail "缺少必要結構" "${missing_structure_root}"
 
+missing_orchestration_adr_root="$(new_case missing-orchestration-adr)"
+rm "${missing_orchestration_adr_root}/.agents/adr/0002-exitable-development-delivery-coordinator.md"
+expect_fail "缺少編排 ADR" "${missing_orchestration_adr_root}" "必要倉庫結構"
+
 missing_timing_reference_root="$(new_case missing-timing-reference)"
 rm "${missing_timing_reference_root}/skills/ai-development-workflow/references/reference-timing.md"
 expect_fail "缺少參考計時指南" "${missing_timing_reference_root}" "必要結構"
@@ -851,6 +876,10 @@ expect_fail "缺少參考計時指南" "${missing_timing_reference_root}" "必�
 missing_workflow_reference_root="$(new_case missing-workflow-reference)"
 rm "${missing_workflow_reference_root}/skills/ai-development-workflow/references/workflow-integration.md"
 expect_fail "缺少外部工作流整合指南" "${missing_workflow_reference_root}" "必要結構"
+
+missing_orchestration_reference_root="$(new_case missing-orchestration-reference)"
+rm "${missing_orchestration_reference_root}/skills/ai-development-workflow/references/skill-orchestration.md"
+expect_fail "缺少 Skill 編排合同" "${missing_orchestration_reference_root}" "必要結構"
 
 missing_measure_script_root="$(new_case missing-measure-script)"
 rm "${missing_measure_script_root}/skills/ai-development-workflow/scripts/measure.py"
@@ -922,7 +951,7 @@ expect_fail "可選 AI 範本缺少可驗證貢獻欄位" "${missing_ai_contribu
 
 missing_requirement_bridge_field_root="$(new_case missing-requirement-bridge-field)"
 bridge_file="${missing_requirement_bridge_field_root}/skills/ai-development-workflow/assets/requirement-plan-template.md"
-sed -i.bak 's/唯一可寫所有者/所有者資訊/' "${bridge_file}"
+sed -i.bak 's/需求級工作流所有者/工作流資訊/' "${bridge_file}"
 rm "${bridge_file}.bak"
 expect_fail "需求範本缺少 Provider 橋接欄位" "${missing_requirement_bridge_field_root}" "Provider 橋接欄位"
 
@@ -946,7 +975,7 @@ expect_fail "測試範本缺少必要章節" "${missing_test_heading_root}" "範
 
 missing_test_bridge_field_root="$(new_case missing-test-bridge-field)"
 bridge_file="${missing_test_bridge_field_root}/skills/ai-development-workflow/assets/test-design-template.md"
-sed -i.bak 's/同步結果/同步資訊/' "${bridge_file}"
+sed -i.bak 's/階段能力執行者/能力資訊/' "${bridge_file}"
 rm "${bridge_file}.bak"
 expect_fail "測試範本缺少 Provider 橋接欄位" "${missing_test_bridge_field_root}" "Provider 橋接欄位"
 

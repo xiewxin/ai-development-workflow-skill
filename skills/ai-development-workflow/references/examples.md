@@ -31,17 +31,24 @@
 
 ### Spec Kit 活動 feature
 
-- 主 Provider：Spec Kit。
+- 需求級工作流所有者：Spec Kit。
 - 所有權：`spec.md` 擁有需求與驗收，`plan.md` 擁有技術設計，`tasks.md` 擁有工作排序。
 - 本 Skill 需求計畫：只橋接上述產物，補齊複用分析、風險、跨倉庫責任與文件回填；只有明確啟用時才補 AI 協作成效，不複製已完整的規格、設計或任務內容。
 - 同步：驗收事實更正時先更新 `spec.md`，再依設計、任務、橋接計畫與測試設計順序回填。
 
 ### Matt Pocock Skills 活動產物
 
-- 主 Provider：Matt Pocock Skills。
+- 需求級工作流所有者：Matt Pocock Skills。
 - 產物定位：`SPEC-42` 為 `to-spec` 的需求與驗收所有者；`TASK-101`、`TASK-102` 為 `to-tickets` 的實作切片與阻塞關係所有者。
 - 本 Skill 需求計畫：橋接 tracker 識別字，只補影響、複用、風險、檔案級定位、測試 seam、文件與驗證回填，不複製完整 spec 或 tickets。
 - 副作用邊界：未取得獨立提交授權時，不使用會建立 commit 的 `implement` 路徑，改用不含提交副作用的原生實作流程。
+
+### User-invoked 單動作交接
+
+- 觸發：已核准計畫需要跨任務追蹤，平台 catalog 提供符合增益門檻的 User-invoked 任務排序能力。
+- 顯式調用指示：只輸出平台目前提供的一項可執行動作，不列第三方靜態命令清單。
+- 交接卡：包含入選原因、計畫定位、副作用、預期 tickets、恢復條件與原生替代；輸出後暫停。
+- 恢復：重新驗證 tickets 的存在性、完整性、唯一可寫所有者與副作用，再接續實作。
 
 ### Provider 失效對照
 
