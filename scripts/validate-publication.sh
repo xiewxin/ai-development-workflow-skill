@@ -39,6 +39,10 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 
+# Publication diagnostics use UTF-8 even when a Windows pipe defaults to cp1252.
+sys.stdout.reconfigure(encoding="utf-8")
+sys.stderr.reconfigure(encoding="utf-8")
+
 root = Path(os.path.abspath(sys.argv[1]))
 
 
