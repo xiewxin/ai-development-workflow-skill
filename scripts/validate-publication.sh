@@ -753,18 +753,12 @@ def validate_plan_package_json() -> None:
             check(execution_path, datetime.fromisoformat(execution["finished_at"].replace("Z", "+00:00")) >= datetime.fromisoformat(execution["started_at"].replace("Z", "+00:00")), "execution")
 
         command_run_ids: set[str] = set()
+        successful_run_ids: set[str] = set()
         test_run_ids: list[str] = []
 
-        def latest_tests_passed(items: object, command_items: object) -> bool:
+        def latest_tests_passed(items: object) -> bool:
             if not isinstance(items, list) or not items:
                 return False
-            if not isinstance(command_items, list):
-                return False
-            task_runs = {
-                item.get("run_id"): item
-                for item in command_items
-                if isinstance(item, dict) and isinstance(item.get("run_id"), str)
-            }
             latest: dict[str, dict] = {}
             for item in items:
                 if not isinstance(item, dict) or not isinstance(item.get("test_id"), str):
@@ -773,9 +767,7 @@ def validate_plan_package_json() -> None:
             return all(
                 item.get("status") == "passed"
                 and isinstance(item.get("run_id"), str)
-                and isinstance(task_runs.get(item.get("run_id")), dict)
-                and task_runs[item["run_id"]].get("exit_code") == 0
-                and task_runs[item["run_id"]].get("result") != "not_run"
+                and item["run_id"] in successful_run_ids
                 for item in latest.values()
             )
 
@@ -808,6 +800,8 @@ def validate_plan_package_json() -> None:
                 if isinstance(run_id, str):
                     check(execution_path, run_id not in command_run_ids, "execution")
                     command_run_ids.add(run_id)
+                    if record.get("exit_code") == 0 and record.get("result") != "not_run":
+                        successful_run_ids.add(run_id)
                 check(execution_path, record.get("planned_run_id") is None or identifier(record.get("planned_run_id"), "RUN"), "execution")
                 workdir = record.get("workdir")
                 check(execution_path, relative_path(workdir) or workdir == "{{INPUT:repository-relative-path}}", "execution")
@@ -820,6 +814,7 @@ def validate_plan_package_json() -> None:
 
         tasks = execution.get("tasks")
         execution_task_ids: set[str] = set()
+        completed_task_tests: list[object] = []
         if not isinstance(tasks, list) or not tasks:
             add_error(execution_path, "execution 欄位")
         else:
@@ -867,13 +862,15 @@ def validate_plan_package_json() -> None:
                     if manifest is not None and manifest.get("commit_policy") == "task-local-commits":
                         check(execution_path, item.get("commit_sha") is not None and commit(item.get("commit_sha")), "execution")
                     check(execution_path, item.get("diff_review") == "passed", "execution")
+                    completed_task_tests.append(tests)
                     command_records = item.get("commands")
-                    check(execution_path, latest_tests_passed(tests, command_records), "execution")
                     check(execution_path, isinstance(command_records, list) and bool(command_records) and all(isinstance(command, dict) and command.get("result") != "not_run" for command in command_records), "execution")
                     if isinstance(command_records, list) and command_records and isinstance(command_records[-1], dict):
                         check(execution_path, command_records[-1].get("exit_code") == 0, "execution")
         commands(execution.get("cumulative_verification"))
         check(execution_path, all(run_id in command_run_ids for run_id in test_run_ids), "execution")
+        for tests in completed_task_tests:
+            check(execution_path, latest_tests_passed(tests), "execution")
         deviations = execution.get("deviations")
         check(execution_path, isinstance(deviations, list), "execution")
         if isinstance(deviations, list):

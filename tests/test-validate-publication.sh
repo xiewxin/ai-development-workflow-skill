@@ -1044,10 +1044,15 @@ elif scenario == "failed-test-run":
     test_run = "RUN-01"
 elif scenario == "cumulative-test-run":
     test_run = "RUN-03"
+elif scenario == "failed-cumulative-test-run":
+    test_run = "RUN-03"
 task["tests"] = [{"test_id": "T-01", "run_id": test_run,
                   "actual": "true", "recorded_at": now,
                   "evidence": "synthetic result", "status": "passed"}]
 execution["cumulative_verification"] = [command("RUN-03", "RUN-12", 0)]
+if scenario == "failed-cumulative-test-run":
+    execution["cumulative_verification"] = [command("RUN-03", "RUN-12", 1),
+                                            command("RUN-04", "RUN-12", 0)]
 manifest_path.write_text(json.dumps(manifest, ensure_ascii=False) + "\n")
 execution_path.write_text(json.dumps(execution, ensure_ascii=False) + "\n")
 PY
@@ -1067,7 +1072,11 @@ expect_fail "通過測試不得引用失敗命令" "${failed_test_run_root}" "ex
 
 cumulative_test_run_root="$(new_case cumulative-test-run)"
 prepare_completed_execution "${cumulative_test_run_root}" "cumulative-test-run"
-expect_fail "Task 測試不得引用累計驗證命令" "${cumulative_test_run_root}" "execution 欄位"
+expect_pass "Task 測試可引用同一 execution 的累計驗證命令" "${cumulative_test_run_root}"
+
+failed_cumulative_test_run_root="$(new_case failed-cumulative-test-run)"
+prepare_completed_execution "${failed_cumulative_test_run_root}" "failed-cumulative-test-run"
+expect_fail "通過測試不得引用失敗後已重試的累計命令" "${failed_cumulative_test_run_root}" "execution 欄位"
 
 missing_measure_script_root="$(new_case missing-measure-script)"
 rm "${missing_measure_script_root}/skills/ai-development-workflow/scripts/measure.py"
