@@ -48,6 +48,29 @@ class RepositoryGuidanceContractTest(unittest.TestCase):
             with self.subTest(expected=expected):
                 self.assertIn(expected, decision)
 
+    def test_orchestration_decision_preserves_exitable_provider_neutrality(
+        self,
+    ) -> None:
+        """ADR 應鎖定雙入口、可退出協調與逐邊產物交接。"""
+        guide = self.read("AGENTS.md")
+        decision = self.read(
+            ".agents/adr/0002-exitable-development-delivery-coordinator.md"
+        )
+        self.assertIn(
+            ".agents/adr/0002-exitable-development-delivery-coordinator.md",
+            guide,
+        )
+        for expected in (
+            "proactive discovery from the platform's current catalog",
+            "explicit user invocation",
+            "Provider-neutral",
+            "non-overlapping capability slots",
+            "lightweight artifact handoff contract",
+            "Exit additional orchestration",
+        ):
+            with self.subTest(expected=expected):
+                self.assertIn(expected, decision)
+
 
 if __name__ == "__main__":
     unittest.main()

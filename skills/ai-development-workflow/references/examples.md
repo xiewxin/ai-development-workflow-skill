@@ -27,21 +27,49 @@
 - 觸發：輸入超過合同允許長度。
 - 緩解與驗證：在請求邊界拒絕，並以邊界測試驗證最大值與超長值。
 
+## 目錄式計畫包範例
+
+新生成計畫包的固定格式是 `docs/plans/YYYY-MM-DD-<topic>/`；以下以虛構主題示範：
+
+```text
+docs/plans/YYYY-MM-DD-order-note/
+├── design.md
+├── delivery.md
+├── implementation.md
+├── test-design.md
+├── manifest.json
+└── execution.json
+```
+
+- `design.md` 擁有介面、資料流、替代方案與非目標；`delivery.md` 擁有目標、範圍、證據、`AC-*`、交付風險與最終驗收。
+- `implementation.md` 以 2–5 分鐘操作、完整程式碼、精確 `Run`／`Expected`、Interfaces、依賴與 `AC-*／S-*／T-*` 映射，直接交給 Superpowers 或原生執行者。
+- `test-design.md` 唯一擁有測試矩陣、資料、邊界、關鍵斷言與 `RUN-*` 命令。
+- 核准時，外部核准紀錄綁定四份 Markdown 的 SHA-256，以及 `execution_mode=executing-plans`、`worktree_policy=isolated-worktree`、`commit_policy=task-local-commits`；確認實際 Provider 符合相容性矩陣後最終化 `manifest.json`，記錄 digest 收據。push、PR、merge、release、publish、部署及 API mutation 仍為獨立授權。
+- materialize 前後都在相同相對路徑驗證 SHA-256；目標 worktree 建立新的 `execution.json`，只回填實際命令、測試、Task 狀態與 commit SHA。
+- 本例不產生 `tasks/`；只有並行、跨會話、跨倉庫或高風險隔離時才派生，並綁定父 `implementation.md` SHA-256。
+
 ## Provider 橋接範例
 
 ### Spec Kit 活動 feature
 
-- 主 Provider：Spec Kit。
+- 需求級工作流所有者：Spec Kit。
 - 所有權：`spec.md` 擁有需求與驗收，`plan.md` 擁有技術設計，`tasks.md` 擁有工作排序。
 - 本 Skill 需求計畫：只橋接上述產物，補齊複用分析、風險、跨倉庫責任與文件回填；只有明確啟用時才補 AI 協作成效，不複製已完整的規格、設計或任務內容。
-- 同步：驗收事實更正時先更新 `spec.md`，再依設計、任務、橋接計畫與測試設計順序回填。
+- 同步：驗收事實更正時先更新唯一所有者的候選版本；已核准計畫包建立新目錄與新 ID，依設計、任務、橋接計畫與測試設計順序同步，重新核准後才恢復執行，舊包保持不變。
 
 ### Matt Pocock Skills 活動產物
 
-- 主 Provider：Matt Pocock Skills。
+- 需求級工作流所有者：Matt Pocock Skills。
 - 產物定位：`SPEC-42` 為 `to-spec` 的需求與驗收所有者；`TASK-101`、`TASK-102` 為 `to-tickets` 的實作切片與阻塞關係所有者。
 - 本 Skill 需求計畫：橋接 tracker 識別字，只補影響、複用、風險、檔案級定位、測試 seam、文件與驗證回填，不複製完整 spec 或 tickets。
 - 副作用邊界：未取得獨立提交授權時，不使用會建立 commit 的 `implement` 路徑，改用不含提交副作用的原生實作流程。
+
+### User-invoked 單動作交接
+
+- 觸發：已核准計畫需要跨任務追蹤，平台 catalog 提供符合增益門檻的 User-invoked 任務排序能力。
+- 顯式調用指示：只輸出平台目前提供的一項可執行動作，不列第三方靜態命令清單。
+- 交接卡：包含入選原因、計畫定位、副作用、預期 tickets、恢復條件與原生替代；輸出後暫停。
+- 恢復：重新驗證 tickets 的存在性、完整性、唯一可寫所有者與副作用，再接續實作。
 
 ### Provider 失效對照
 

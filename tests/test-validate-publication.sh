@@ -51,6 +51,7 @@ create_valid_repo() {
         '# Repository maintenance guide' \
         '' \
         'See the [runtime decision](.agents/adr/0001-runtime-boundary.md).' \
+        'See the [orchestration decision](.agents/adr/0002-exitable-development-delivery-coordinator.md).' \
         > "${root}/AGENTS.md"
 
     printf '%s\n' \
@@ -58,6 +59,12 @@ create_valid_repo() {
         '' \
         'The core workflow remains available without the timing helper.' \
         > "${root}/.agents/adr/0001-runtime-boundary.md"
+
+    printf '%s\n' \
+        '# 0002: Keep orchestration exitable' \
+        '' \
+        'External capabilities remain optional and Provider-neutral.' \
+        > "${root}/.agents/adr/0002-exitable-development-delivery-coordinator.md"
 
     printf '%s\n' \
         '---' \
@@ -87,7 +94,9 @@ create_valid_repo() {
     printf '%s\n' '# 差異審查' > "${skill_root}/references/git-diff-review.md"
     printf '%s\n' '# 虛構範例' > "${skill_root}/references/examples.md"
     printf '%s\n' '# 參考計時' '' '只保存虛構聚合資料。' > "${skill_root}/references/reference-timing.md"
+    printf '%s\n' '# Skill 編排合同' '' '只依平台本輪提供的虛構 catalog metadata。' > "${skill_root}/references/skill-orchestration.md"
     printf '%s\n' '# 外部工作流整合' '' '只保存虛構 Provider 橋接規則。' > "${skill_root}/references/workflow-integration.md"
+    printf '%s\n' '# 計畫包合同' '' '只保存虛構目錄式計畫包、核准與執行交接規則。' > "${skill_root}/references/plan-package.md"
     printf '%s\n' \
         '#!/usr/bin/env python3' \
         '"""公開驗證用虛構腳本。"""' \
@@ -97,10 +106,10 @@ create_valid_repo() {
         '# {{INPUT:需求主題}}' \
         '## 基本資訊／狀態' \
         '## Provider 橋接' \
-        '- 主 Provider：{{INPUT:Provider 或原生}}' \
-        '| 產物定位 | 完整性 | 唯一可寫所有者 | 同步結果 |' \
-        '| --- | --- | --- | --- |' \
-        '| {{INPUT:相對路徑或識別字}} | {{INPUT:完整性}} | {{INPUT:所有者}} | {{INPUT:同步結果}} |' \
+        '- 需求級工作流所有者：{{INPUT:工作流或原生}}' \
+        '| 階段能力執行者 | 產物定位 | 完整性 | 唯一可寫所有者 | 同步結果 |' \
+        '| --- | --- | --- | --- | --- |' \
+        '| {{INPUT:執行者或原生}} | {{INPUT:相對路徑或識別字}} | {{INPUT:完整性}} | {{INPUT:所有者}} | {{INPUT:同步結果}} |' \
         '## 需求來源與目標' \
         '### 行為與驗收場景（僅適用時保留）' \
         '## 範圍與非範圍' \
@@ -156,10 +165,10 @@ create_valid_repo() {
         '# {{INPUT:測試設計主題}}' \
         '## 基本資訊／關聯' \
         '## Provider 橋接' \
-        '- 主 Provider：{{INPUT:Provider 或原生}}' \
-        '| 產物定位 | 完整性 | 唯一可寫所有者 | 同步結果 |' \
-        '| --- | --- | --- | --- |' \
-        '| {{INPUT:相對路徑或識別字}} | {{INPUT:完整性}} | {{INPUT:所有者}} | {{INPUT:同步結果}} |' \
+        '- 需求級工作流所有者：{{INPUT:工作流或原生}}' \
+        '| 階段能力執行者 | 產物定位 | 完整性 | 唯一可寫所有者 | 同步結果 |' \
+        '| --- | --- | --- | --- | --- |' \
+        '| {{INPUT:執行者或原生}} | {{INPUT:相對路徑或識別字}} | {{INPUT:完整性}} | {{INPUT:所有者}} | {{INPUT:同步結果}} |' \
         '## 範圍與策略' \
         '- 測試 seam：{{INPUT:最高且穩定的公開介面}}' \
         '## 環境與依賴' \
@@ -169,9 +178,100 @@ create_valid_repo() {
         '## 手動驗證與可選唯讀 SQL' \
         '## 回歸' \
         '## 交付測試清單' \
-        '## 自動化測試實施結果' \
-        '## 偏差與剩餘風險' \
+        '## 執行證據索引' \
+        '## 設計限制與未覆蓋風險' \
         > "${skill_root}/assets/test-design-template.md"
+
+    printf '%s\n' \
+        '# {{INPUT:主題}}設計' \
+        '## 背景與為什麼' \
+        '## 做什麼' \
+        '## 架構與介面' \
+        '## 替代方案' \
+        '## 設計風險' \
+        '## 非目標' \
+        > "${skill_root}/assets/design-template.md"
+
+    printf '%s\n' \
+        '# {{INPUT:主題}}交付合同' \
+        '## 狀態與來源' \
+        '## 目標與驗收' \
+        '## 範圍' \
+        '## 現況與證據' \
+        '## 交付風險' \
+        '## 文件處置' \
+        '## 最終驗收' \
+        > "${skill_root}/assets/delivery-template.md"
+
+    printf '%s\n' \
+        '# {{INPUT:主題}} Implementation Plan' \
+        '**Goal:** {{INPUT:目標}}' \
+        '**Architecture:** [design.md]({{INPUT:./design.md}})' \
+        '**Delivery contract:** [delivery.md]({{INPUT:./delivery.md}})' \
+        '**Test design:** [test-design.md]({{INPUT:./test-design.md}})' \
+        '## Global Constraints' \
+        '### Task 1: {{INPUT:任務}}' \
+        '**Interfaces:** {{INPUT:介面}}' \
+        '**Dependencies:** {{INPUT:依賴}}' \
+        'Expected: FAIL' \
+        'Expected: PASS' \
+        '## Final cumulative verification' \
+        > "${skill_root}/assets/implementation-template.md"
+
+    printf '%s\n' \
+        '# {{INPUT:Task ID}}' \
+        '- 父計畫路徑：`docs/plans/example/implementation.md`' \
+        '- 父計畫 SHA-256：`{{INPUT:sha256}}`' \
+        '- Task ID：`S-01`' \
+        '- 驗收：`AC-01`' \
+        '- 依賴：無' \
+        '- Allowed files：`src/example.py`' \
+        '派生執行包，不是第二份事實來源。' \
+        > "${skill_root}/assets/task-template.md"
+
+    printf '%s\n' \
+        '{' \
+        '  "schema_version": 1,' \
+        '  "plan_package_id": "example",' \
+        '  "source_revision": "{{INPUT:40-or-64-lowercase-hex}}",' \
+        '  "execution_id": "example-execution",' \
+        '  "status": "draft",' \
+        '  "approved_at": null,' \
+        '  "finalized_at": null,' \
+        '  "approval_record": "example-approval",' \
+        '  "derived_tasks": [],' \
+        '  "files": {' \
+        '    "design.md": {"algorithm": "sha256", "sha256": "{{INPUT:64-lowercase-hex}}"},' \
+        '    "delivery.md": {"algorithm": "sha256", "sha256": "{{INPUT:64-lowercase-hex}}"},' \
+        '    "implementation.md": {"algorithm": "sha256", "sha256": "{{INPUT:64-lowercase-hex}}"},' \
+        '    "test-design.md": {"algorithm": "sha256", "sha256": "{{INPUT:64-lowercase-hex}}"}' \
+        '  },' \
+        '  "execution_mode": "inline",' \
+        '  "worktree_policy": "current-checkout",' \
+        '  "commit_policy": "none",' \
+        '  "authorization": {"external_actions": {"push": "separate_authorization", "pull_request": "separate_authorization", "merge": "separate_authorization", "release": "separate_authorization", "publish": "separate_authorization", "deploy": "separate_authorization", "remote_write": "separate_authorization", "api_mutation": "separate_authorization"}}' \
+        '}' \
+        > "${skill_root}/assets/manifest-template.json"
+
+    printf '%s\n' \
+        '{' \
+        '  "schema_version": 1,' \
+        '  "plan_package_id": "example",' \
+        '  "manifest_sha256": "{{INPUT:64-lowercase-hex}}",' \
+        '  "execution_id": "example-execution",' \
+        '  "base_commit_sha": null,' \
+        '  "status": "not_started",' \
+        '  "started_at": null,' \
+        '  "finished_at": null,' \
+        '  "worktree": null,' \
+        '  "cumulative_verification": [],' \
+        '  "final_commit_sha": null,' \
+        '  "final_diff_review": "not_run",' \
+        '  "deviations": [],' \
+        '  "remaining_risks": [],' \
+        '  "tasks": [{"task_id": "S-01", "status": "not_started", "changed_files": [], "commands": [], "tests": [], "diff_review": "not_run", "commit_sha": null}]' \
+        '}' \
+        > "${skill_root}/assets/execution-template.json"
 }
 
 # 執行檢查並驗證成功。
@@ -624,6 +724,19 @@ local_path='/Users/'"example"'/workspace'
 printf '%s\n' "${local_path}" > "${local_path_root}/unsafe.txt"
 expect_fail "本機家目錄路徑" "${local_path_root}"
 
+process_artifact_root="$(new_case process-artifact-boundary)"
+mkdir -p \
+    "${process_artifact_root}/docs/plans/private" \
+    "${process_artifact_root}/docs/specs"
+printf '%s\n' "${local_path}" > "${process_artifact_root}/docs/plans/private/raw-events.jsonl"
+printf '%s\n' "${local_path}" > "${process_artifact_root}/docs/specs/local-note.md"
+expect_pass "忽略明確過程產物目錄" "${process_artifact_root}"
+
+public_lookalike_root="$(new_case public-lookalike-boundary)"
+mkdir -p "${public_lookalike_root}/docs/planning"
+printf '%s\n' "${local_path}" > "${public_lookalike_root}/docs/planning/public-note.md"
+expect_fail "相似公開目錄仍受檢查" "${public_lookalike_root}" "本機家目錄路徑"
+
 private_ip_root="$(new_case private-ip)"
 private_ip='10''.''20''.''30''.''40'
 printf '%s\n' "${private_ip}" > "${private_ip_root}/unsafe.txt"
@@ -844,6 +957,10 @@ missing_structure_root="$(new_case missing-structure)"
 rm "${missing_structure_root}/skills/ai-development-workflow/references/examples.md"
 expect_fail "缺少必要結構" "${missing_structure_root}"
 
+missing_orchestration_adr_root="$(new_case missing-orchestration-adr)"
+rm "${missing_orchestration_adr_root}/.agents/adr/0002-exitable-development-delivery-coordinator.md"
+expect_fail "缺少編排 ADR" "${missing_orchestration_adr_root}" "必要倉庫結構"
+
 missing_timing_reference_root="$(new_case missing-timing-reference)"
 rm "${missing_timing_reference_root}/skills/ai-development-workflow/references/reference-timing.md"
 expect_fail "缺少參考計時指南" "${missing_timing_reference_root}" "必要結構"
@@ -851,6 +968,162 @@ expect_fail "缺少參考計時指南" "${missing_timing_reference_root}" "必�
 missing_workflow_reference_root="$(new_case missing-workflow-reference)"
 rm "${missing_workflow_reference_root}/skills/ai-development-workflow/references/workflow-integration.md"
 expect_fail "缺少外部工作流整合指南" "${missing_workflow_reference_root}" "必要結構"
+
+missing_orchestration_reference_root="$(new_case missing-orchestration-reference)"
+rm "${missing_orchestration_reference_root}/skills/ai-development-workflow/references/skill-orchestration.md"
+expect_fail "缺少 Skill 編排合同" "${missing_orchestration_reference_root}" "必要結構"
+
+missing_plan_package_reference_root="$(new_case missing-plan-package-reference)"
+rm "${missing_plan_package_reference_root}/skills/ai-development-workflow/references/plan-package.md"
+expect_fail "缺少計畫包合同" "${missing_plan_package_reference_root}" "必要結構"
+
+invalid_manifest_template_root="$(new_case invalid-manifest-template)"
+printf '%s\n' '{invalid json' > "${invalid_manifest_template_root}/skills/ai-development-workflow/assets/manifest-template.json"
+expect_fail "manifest 範本不是合法 JSON" "${invalid_manifest_template_root}" "計畫包 JSON"
+
+duplicate_manifest_key_root="$(new_case duplicate-manifest-key)"
+manifest_file="${duplicate_manifest_key_root}/skills/ai-development-workflow/assets/manifest-template.json"
+sed -i.bak 's/"schema_version": 1/"schema_version": 1, "schema_version": 1/' "${manifest_file}"
+rm "${manifest_file}.bak"
+expect_fail "manifest 重複頂層鍵不得被靜默覆蓋" "${duplicate_manifest_key_root}" "計畫包 JSON"
+
+duplicate_execution_key_root="$(new_case duplicate-execution-key)"
+execution_file="${duplicate_execution_key_root}/skills/ai-development-workflow/assets/execution-template.json"
+sed -i.bak 's/"commit_sha": null/"commit_sha": null, "commit_sha": null/' "${execution_file}"
+rm "${execution_file}.bak"
+expect_fail "execution 重複巢狀鍵不得被靜默覆蓋" "${duplicate_execution_key_root}" "計畫包 JSON"
+
+extra_manifest_file_root="$(new_case extra-manifest-file)"
+manifest_file="${extra_manifest_file_root}/skills/ai-development-workflow/assets/manifest-template.json"
+sed -i.bak 's/    "test-design.md":/    "unapproved.txt": {"algorithm": "sha256", "sha256": "example"},\
+    "test-design.md":/' "${manifest_file}"
+rm "${manifest_file}.bak"
+expect_fail "manifest 範本不得批准額外正式文件" "${extra_manifest_file_root}" "manifest 欄位"
+
+missing_execution_task_field_root="$(new_case missing-execution-task-field)"
+execution_file="${missing_execution_task_field_root}/skills/ai-development-workflow/assets/execution-template.json"
+sed -i.bak 's/, "commit_sha": null//' "${execution_file}"
+rm "${execution_file}.bak"
+expect_fail "execution 範本缺少 commit SHA" "${missing_execution_task_field_root}" "execution 欄位"
+
+# 通過觀測必須引用同一 execution 內真正成功的命令。
+prepare_completed_execution() {
+    local root="$1"
+    local scenario="$2"
+    python3 - "${root}/skills/ai-development-workflow/assets" "${scenario}" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+assets = Path(sys.argv[1])
+scenario = sys.argv[2]
+manifest_path = assets / "manifest-template.json"
+execution_path = assets / "execution-template.json"
+manifest = json.loads(manifest_path.read_text())
+execution = json.loads(execution_path.read_text())
+revision = "a" * 40
+now = "2026-01-01T00:00:00+00:00"
+manifest["source_revision"] = revision
+manifest.update(status="approved", approved_at=now, finalized_at=now)
+execution.update(base_commit_sha=revision, status="completed", started_at=now,
+                 finished_at=now, final_diff_review="passed", manifest_sha256="b" * 64)
+if scenario == "draft-manifest":
+    manifest.update(status="draft", approved_at=None, finalized_at=None)
+elif scenario == "unfinalized-manifest":
+    manifest["finalized_at"] = None
+elif scenario == "placeholder-manifest-digest":
+    execution["manifest_sha256"] = "{{INPUT:64-lowercase-hex}}"
+elif scenario == "superseded-execution":
+    execution["status"] = "superseded"
+elif scenario == "superseded-pair":
+    manifest["status"] = "superseded"
+    execution["status"] = "superseded"
+elif scenario == "completed-superseded-manifest":
+    manifest["status"] = "superseded"
+
+def command(run_id, planned_run_id, exit_code):
+    return {"run_id": run_id, "planned_run_id": planned_run_id,
+            "workdir": ".", "actual": "true", "recorded_at": now,
+            "exit_code": exit_code, "result": "failed" if exit_code else "passed"}
+
+task = execution["tasks"][0]
+task["status"] = "completed"
+task["diff_review"] = "passed"
+task["commands"] = [command("RUN-01", "RUN-10", 1),
+                    command("RUN-02", "RUN-10", 0)]
+test_run = "RUN-02"
+if scenario == "unrelated-success":
+    task["commands"][1]["planned_run_id"] = "RUN-11"
+elif scenario == "failed-test-run":
+    test_run = "RUN-01"
+elif scenario == "cumulative-test-run":
+    test_run = "RUN-03"
+elif scenario == "failed-cumulative-test-run":
+    test_run = "RUN-03"
+elif scenario == "in-progress-failed-test-run":
+    test_run = "RUN-01"
+    task["status"] = "in_progress"
+    execution.update(status="in_progress", finished_at=None, final_diff_review="not_run")
+task["tests"] = [{"test_id": "T-01", "run_id": test_run,
+                  "actual": "true", "recorded_at": now,
+                  "evidence": "synthetic result", "status": "passed"}]
+if scenario in ("invalid-passed-history", "valid-failed-history"):
+    historical = dict(task["tests"][0], run_id="RUN-01")
+    if scenario == "valid-failed-history":
+        historical["status"] = "failed"
+    task["tests"].insert(0, historical)
+execution["cumulative_verification"] = [command("RUN-03", "RUN-12", 0)]
+if scenario == "failed-cumulative-test-run":
+    execution["cumulative_verification"] = [command("RUN-03", "RUN-12", 1),
+                                            command("RUN-04", "RUN-12", 0)]
+manifest_path.write_text(json.dumps(manifest, ensure_ascii=False) + "\n")
+execution_path.write_text(json.dumps(execution, ensure_ascii=False) + "\n")
+PY
+}
+
+completed_retry_root="$(new_case completed-retry)"
+prepare_completed_execution "${completed_retry_root}" "valid-retry"
+expect_pass "Task 相同計畫命令重試成功" "${completed_retry_root}"
+
+unrelated_success_root="$(new_case unrelated-success)"
+prepare_completed_execution "${unrelated_success_root}" "unrelated-success"
+expect_pass "RED 與 GREEN 使用不同計畫命令仍可完成" "${unrelated_success_root}"
+
+failed_test_run_root="$(new_case failed-test-run)"
+prepare_completed_execution "${failed_test_run_root}" "failed-test-run"
+expect_fail "通過測試不得引用失敗命令" "${failed_test_run_root}" "execution 欄位"
+
+cumulative_test_run_root="$(new_case cumulative-test-run)"
+prepare_completed_execution "${cumulative_test_run_root}" "cumulative-test-run"
+expect_pass "Task 測試可引用同一 execution 的累計驗證命令" "${cumulative_test_run_root}"
+
+failed_cumulative_test_run_root="$(new_case failed-cumulative-test-run)"
+prepare_completed_execution "${failed_cumulative_test_run_root}" "failed-cumulative-test-run"
+expect_fail "通過測試不得引用失敗後已重試的累計命令" "${failed_cumulative_test_run_root}" "execution 欄位"
+
+in_progress_failed_test_run_root="$(new_case in-progress-failed-test-run)"
+prepare_completed_execution "${in_progress_failed_test_run_root}" "in-progress-failed-test-run"
+expect_fail "執行中測試也不得把失敗命令記為通過" "${in_progress_failed_test_run_root}" "execution 欄位"
+
+invalid_passed_history_root="$(new_case invalid-passed-history)"
+prepare_completed_execution "${invalid_passed_history_root}" "invalid-passed-history"
+expect_fail "後續成功不得掩蓋錯誤的歷史通過觀測" "${invalid_passed_history_root}" "execution 欄位"
+
+valid_failed_history_root="$(new_case valid-failed-history)"
+prepare_completed_execution "${valid_failed_history_root}" "valid-failed-history"
+expect_pass "合法 RED 失敗歷史與後續 GREEN 通過可保留" "${valid_failed_history_root}"
+
+for scenario in draft-manifest unfinalized-manifest placeholder-manifest-digest completed-superseded-manifest; do
+    invalid_lifecycle_root="$(new_case "${scenario}")"
+    prepare_completed_execution "${invalid_lifecycle_root}" "${scenario}"
+    expect_fail "已執行紀錄拒絕 ${scenario}" "${invalid_lifecycle_root}" "execution 欄位"
+done
+
+for scenario in superseded-execution superseded-pair; do
+    superseded_execution_root="$(new_case "${scenario}")"
+    prepare_completed_execution "${superseded_execution_root}" "${scenario}"
+    expect_pass "保留有效的 ${scenario} 歷史" "${superseded_execution_root}"
+done
 
 missing_measure_script_root="$(new_case missing-measure-script)"
 rm "${missing_measure_script_root}/skills/ai-development-workflow/scripts/measure.py"
@@ -922,7 +1195,7 @@ expect_fail "可選 AI 範本缺少可驗證貢獻欄位" "${missing_ai_contribu
 
 missing_requirement_bridge_field_root="$(new_case missing-requirement-bridge-field)"
 bridge_file="${missing_requirement_bridge_field_root}/skills/ai-development-workflow/assets/requirement-plan-template.md"
-sed -i.bak 's/唯一可寫所有者/所有者資訊/' "${bridge_file}"
+sed -i.bak 's/需求級工作流所有者/工作流資訊/' "${bridge_file}"
 rm "${bridge_file}.bak"
 expect_fail "需求範本缺少 Provider 橋接欄位" "${missing_requirement_bridge_field_root}" "Provider 橋接欄位"
 
@@ -946,7 +1219,7 @@ expect_fail "測試範本缺少必要章節" "${missing_test_heading_root}" "範
 
 missing_test_bridge_field_root="$(new_case missing-test-bridge-field)"
 bridge_file="${missing_test_bridge_field_root}/skills/ai-development-workflow/assets/test-design-template.md"
-sed -i.bak 's/同步結果/同步資訊/' "${bridge_file}"
+sed -i.bak 's/階段能力執行者/能力資訊/' "${bridge_file}"
 rm "${bridge_file}.bak"
 expect_fail "測試範本缺少 Provider 橋接欄位" "${missing_test_bridge_field_root}" "Provider 橋接欄位"
 
