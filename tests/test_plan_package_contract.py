@@ -8,6 +8,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SKILL_ROOT = ROOT / "skills" / "ai-development-workflow"
+BASH_EXECUTABLE = shutil.which("bash") or "bash"
 
 
 def copy_skill_fixture(source: Path, destination: Path) -> None:
@@ -26,6 +27,11 @@ class PlanPackageContractTest(unittest.TestCase):
     def read_json(self, relative: str) -> dict:
         return json.loads(self.read(relative))
 
+    def test_validator_bash_is_resolved_before_starting_subprocess(self) -> None:
+        """絕對路徑避免 Windows 子進程繞過 PATH 選中 WSL launcher。"""
+        self.assertTrue(Path(BASH_EXECUTABLE).is_absolute())
+        self.assertEqual(BASH_EXECUTABLE, shutil.which("bash"))
+
     def test_publication_fixture_excludes_only_generated_bytecode(self) -> None:
         """測試產生的快取不得混入夾具；其他二進位檔仍須被發布檢查拒絕。"""
         with tempfile.TemporaryDirectory() as temporary:
@@ -39,7 +45,7 @@ class PlanPackageContractTest(unittest.TestCase):
             fixture = root / "clean-fixture"
             copy_skill_fixture(source, fixture)
             result = subprocess.run(
-                ["bash", str(ROOT / "scripts/validate-publication.sh"), str(fixture)],
+                [BASH_EXECUTABLE, str(ROOT / "scripts/validate-publication.sh"), str(fixture)],
                 capture_output=True, text=True, check=False,
             )
             self.assertEqual(result.returncode, 0, result.stdout)
@@ -48,7 +54,7 @@ class PlanPackageContractTest(unittest.TestCase):
             rejected_fixture = root / "rejected-fixture"
             copy_skill_fixture(source, rejected_fixture)
             result = subprocess.run(
-                ["bash", str(ROOT / "scripts/validate-publication.sh"), str(rejected_fixture)],
+                [BASH_EXECUTABLE, str(ROOT / "scripts/validate-publication.sh"), str(rejected_fixture)],
                 capture_output=True, text=True, check=False,
             )
             self.assertNotEqual(result.returncode, 0, result.stdout)
@@ -277,7 +283,7 @@ class PlanPackageContractTest(unittest.TestCase):
             fixture = Path(temporary).resolve() / "skill"
             copy_skill_fixture(SKILL_ROOT, fixture)
             baseline = subprocess.run(
-                ["bash", str(ROOT / "scripts/validate-publication.sh"), str(fixture)],
+                [BASH_EXECUTABLE, str(ROOT / "scripts/validate-publication.sh"), str(fixture)],
                 capture_output=True, text=True, check=False,
             )
             self.assertEqual(baseline.returncode, 0, baseline.stdout)
@@ -287,7 +293,7 @@ class PlanPackageContractTest(unittest.TestCase):
             derived_task(valid_task_manifest)
             manifest_path.write_text(json.dumps(valid_task_manifest), encoding="utf-8")
             valid_task_result = subprocess.run(
-                ["bash", str(ROOT / "scripts/validate-publication.sh"), str(fixture)],
+                [BASH_EXECUTABLE, str(ROOT / "scripts/validate-publication.sh"), str(fixture)],
                 capture_output=True, text=True, check=False,
             )
             self.assertEqual(valid_task_result.returncode, 0, valid_task_result.stdout)
@@ -300,7 +306,7 @@ class PlanPackageContractTest(unittest.TestCase):
                     mutate(payload)
                     path.write_text(json.dumps(payload), encoding="utf-8")
                     result = subprocess.run(
-                        ["bash", str(ROOT / "scripts/validate-publication.sh"), str(fixture)],
+                        [BASH_EXECUTABLE, str(ROOT / "scripts/validate-publication.sh"), str(fixture)],
                         capture_output=True, text=True, check=False,
                     )
                     path.write_text(original, encoding="utf-8")
@@ -347,7 +353,7 @@ class PlanPackageContractTest(unittest.TestCase):
                     json.dumps(payload), encoding="utf-8",
                 )
             result = subprocess.run(
-                ["bash", str(ROOT / "scripts/validate-publication.sh"), str(fixture)],
+                [BASH_EXECUTABLE, str(ROOT / "scripts/validate-publication.sh"), str(fixture)],
                 capture_output=True, text=True, check=False,
             )
             self.assertEqual(result.returncode, 0, result.stdout)
@@ -361,7 +367,7 @@ class PlanPackageContractTest(unittest.TestCase):
                 json.dumps(execution), encoding="utf-8",
             )
             result = subprocess.run(
-                ["bash", str(ROOT / "scripts/validate-publication.sh"), str(fixture)],
+                [BASH_EXECUTABLE, str(ROOT / "scripts/validate-publication.sh"), str(fixture)],
                 capture_output=True, text=True, check=False,
             )
             self.assertNotEqual(result.returncode, 0, result.stdout)
@@ -371,7 +377,7 @@ class PlanPackageContractTest(unittest.TestCase):
                 json.dumps(execution), encoding="utf-8",
             )
             result = subprocess.run(
-                ["bash", str(ROOT / "scripts/validate-publication.sh"), str(fixture)],
+                [BASH_EXECUTABLE, str(ROOT / "scripts/validate-publication.sh"), str(fixture)],
                 capture_output=True, text=True, check=False,
             )
             self.assertEqual(result.returncode, 0, result.stdout)
@@ -384,7 +390,7 @@ class PlanPackageContractTest(unittest.TestCase):
                 json.dumps(manifest), encoding="utf-8",
             )
             result = subprocess.run(
-                ["bash", str(ROOT / "scripts/validate-publication.sh"), str(fixture)],
+                [BASH_EXECUTABLE, str(ROOT / "scripts/validate-publication.sh"), str(fixture)],
                 capture_output=True, text=True, check=False,
             )
             self.assertNotEqual(result.returncode, 0, result.stdout)
@@ -394,7 +400,7 @@ class PlanPackageContractTest(unittest.TestCase):
                 json.dumps(execution), encoding="utf-8",
             )
             result = subprocess.run(
-                ["bash", str(ROOT / "scripts/validate-publication.sh"), str(fixture)],
+                [BASH_EXECUTABLE, str(ROOT / "scripts/validate-publication.sh"), str(fixture)],
                 capture_output=True, text=True, check=False,
             )
             self.assertEqual(result.returncode, 0, result.stdout)
@@ -451,7 +457,7 @@ class PlanPackageContractTest(unittest.TestCase):
                     execution["cumulative_verification"] = cumulative
                     (fixture / "assets/execution-template.json").write_text(json.dumps(execution), encoding="utf-8")
                     result = subprocess.run(
-                        ["bash", str(ROOT / "scripts/validate-publication.sh"), str(fixture)],
+                        [BASH_EXECUTABLE, str(ROOT / "scripts/validate-publication.sh"), str(fixture)],
                         capture_output=True, text=True, check=False,
                     )
                     if accepted:
