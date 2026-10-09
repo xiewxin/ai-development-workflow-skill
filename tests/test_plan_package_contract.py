@@ -46,7 +46,7 @@ class PlanPackageContractTest(unittest.TestCase):
             copy_skill_fixture(source, fixture)
             result = subprocess.run(
                 [BASH_EXECUTABLE, str(ROOT / "scripts/validate-publication.sh"), str(fixture)],
-                capture_output=True, text=True, check=False,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=False,
             )
             self.assertEqual(result.returncode, 0, result.stdout)
 
@@ -55,7 +55,7 @@ class PlanPackageContractTest(unittest.TestCase):
             copy_skill_fixture(source, rejected_fixture)
             result = subprocess.run(
                 [BASH_EXECUTABLE, str(ROOT / "scripts/validate-publication.sh"), str(rejected_fixture)],
-                capture_output=True, text=True, check=False,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=False,
             )
             self.assertNotEqual(result.returncode, 0, result.stdout)
             self.assertIn("scripts/unexpected.bin", result.stdout)
@@ -284,7 +284,7 @@ class PlanPackageContractTest(unittest.TestCase):
             copy_skill_fixture(SKILL_ROOT, fixture)
             baseline = subprocess.run(
                 [BASH_EXECUTABLE, str(ROOT / "scripts/validate-publication.sh"), str(fixture)],
-                capture_output=True, text=True, check=False,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=False,
             )
             self.assertEqual(baseline.returncode, 0, baseline.stdout)
             manifest_path = fixture / "assets" / "manifest-template.json"
@@ -294,7 +294,7 @@ class PlanPackageContractTest(unittest.TestCase):
             manifest_path.write_text(json.dumps(valid_task_manifest), encoding="utf-8")
             valid_task_result = subprocess.run(
                 [BASH_EXECUTABLE, str(ROOT / "scripts/validate-publication.sh"), str(fixture)],
-                capture_output=True, text=True, check=False,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=False,
             )
             self.assertEqual(valid_task_result.returncode, 0, valid_task_result.stdout)
             manifest_path.write_text(original_manifest, encoding="utf-8")
@@ -307,7 +307,7 @@ class PlanPackageContractTest(unittest.TestCase):
                     path.write_text(json.dumps(payload), encoding="utf-8")
                     result = subprocess.run(
                         [BASH_EXECUTABLE, str(ROOT / "scripts/validate-publication.sh"), str(fixture)],
-                        capture_output=True, text=True, check=False,
+                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=False,
                     )
                     path.write_text(original, encoding="utf-8")
                     self.assertNotEqual(result.returncode, 0, result.stdout)
@@ -354,7 +354,7 @@ class PlanPackageContractTest(unittest.TestCase):
                 )
             result = subprocess.run(
                 [BASH_EXECUTABLE, str(ROOT / "scripts/validate-publication.sh"), str(fixture)],
-                capture_output=True, text=True, check=False,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=False,
             )
             self.assertEqual(result.returncode, 0, result.stdout)
 
@@ -368,7 +368,7 @@ class PlanPackageContractTest(unittest.TestCase):
             )
             result = subprocess.run(
                 [BASH_EXECUTABLE, str(ROOT / "scripts/validate-publication.sh"), str(fixture)],
-                capture_output=True, text=True, check=False,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=False,
             )
             self.assertNotEqual(result.returncode, 0, result.stdout)
             self.assertIn("[execution 欄位]", result.stdout)
@@ -378,7 +378,7 @@ class PlanPackageContractTest(unittest.TestCase):
             )
             result = subprocess.run(
                 [BASH_EXECUTABLE, str(ROOT / "scripts/validate-publication.sh"), str(fixture)],
-                capture_output=True, text=True, check=False,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=False,
             )
             self.assertEqual(result.returncode, 0, result.stdout)
             execution["tasks"][0]["commit_sha"] = None
@@ -391,7 +391,7 @@ class PlanPackageContractTest(unittest.TestCase):
             )
             result = subprocess.run(
                 [BASH_EXECUTABLE, str(ROOT / "scripts/validate-publication.sh"), str(fixture)],
-                capture_output=True, text=True, check=False,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=False,
             )
             self.assertNotEqual(result.returncode, 0, result.stdout)
             self.assertIn("[execution 欄位]", result.stdout)
@@ -401,7 +401,7 @@ class PlanPackageContractTest(unittest.TestCase):
             )
             result = subprocess.run(
                 [BASH_EXECUTABLE, str(ROOT / "scripts/validate-publication.sh"), str(fixture)],
-                capture_output=True, text=True, check=False,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=False,
             )
             self.assertEqual(result.returncode, 0, result.stdout)
 
@@ -458,7 +458,7 @@ class PlanPackageContractTest(unittest.TestCase):
                     (fixture / "assets/execution-template.json").write_text(json.dumps(execution), encoding="utf-8")
                     result = subprocess.run(
                         [BASH_EXECUTABLE, str(ROOT / "scripts/validate-publication.sh"), str(fixture)],
-                        capture_output=True, text=True, check=False,
+                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=False,
                     )
                     if accepted:
                         self.assertEqual(result.returncode, 0, result.stdout)
