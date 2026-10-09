@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "plan_package_id": "{{INPUT:plan-package-id}}",
+  "execution_id": "{{INPUT:single-execution-id}}",
+  "manifest_sha256": "{{INPUT:64-lowercase-hex}}",
+  "base_commit_sha": null,
+  "status": "not_started",
+  "started_at": null,
+  "finished_at": null,
+  "worktree": "{{INPUT:repository-relative-identity-or-null}}",
+  "tasks": [
+    {
+      "task_id": "S-01",
+      "status": "not_started",
+      "changed_files": [],
+      "commands": [
+        {
+          "run_id": "RUN-01",
+          "planned_run_id": "RUN-01",
+          "workdir": "{{INPUT:repository-relative-path}}",
+          "actual": null,
+          "recorded_at": null,
+          "exit_code": null,
+          "result": "not_run"
+        }
+      ],
+      "tests": [
+        {
+          "test_id": "T-01",
+          "run_id": "RUN-01",
+          "actual": null,
+          "recorded_at": null,
+          "evidence": null,
+          "status": "not_run"
+        }
+      ],
+      "diff_review": "not_run",
+      "commit_sha": null
+    }
+  ],
+  "cumulative_verification": [],
+  "final_commit_sha": null,
+  "final_diff_review": "not_run",
+  "deviations": [],
+  "remaining_risks": []
+}

@@ -27,6 +27,8 @@ Provider profile 只能約束已出現在階段能力快照、且由通用編排
 
 - 依 catalog 中實際提供的候選及其完整合同判斷可用能力，不因 Superpowers 已載入就自動選為需求級工作流所有者。
 - 候選合同若要求 brainstorming、test-driven-development、executing-plans、subagent-driven-development、requesting-code-review 或 verification-before-completion 等前置，必須完整履行；不允許獨立使用的能力不能拆出。
+- 核准計畫包的 `implementation.md` 是 executing-plans 與 subagent-driven-development 的直接輸入，不需要格式轉換；先依[計畫包相容性矩陣](plan-package.md#superpowers-相容性矩陣)判定整個能力包可用，再核對外部核准紀錄、`manifest.json` 最終收據與 execution、worktree、commit 策略。
+- Superpowers 只執行 `implementation.md` 的 Task，實際命令、測試、Task 狀態與 commit SHA 回填 `execution.json`。不得把本 Skill 變成程式碼執行器，也不得讓外部執行狀態反向改寫核准計畫。
 - Superpowers 審查輸出只作原始證據，最終由本 Skill 收斂為單一 `REV-*` 清單。
 
 ### Matt Pocock Skills
@@ -37,7 +39,7 @@ Provider profile 只能約束已出現在階段能力快照、且由通用編排
 - `wayfinder` 只在工作跨多個對話且仍有決策迷霧時擁有 decision map；完成後仍須收斂為可核准 spec 與可執行工作。
 - `tdd` 可提供已確認測試 seam 的 red–green 證據；`code-review` 的 Standards／Spec 結果只是原始證據，最後合併為單一 `REV-*` 清單。
 - `to-spec`、`to-tickets`、`implement` 等標示為 User-invoked 時，只能輸出一項目前平台可執行的顯式調用指示並暫停，不假裝自動調用。`tdd`、`code-review` 等只有在 catalog 與完整合同確認為 Model-invoked 時才可由平台觸發。
-- `implement` 可能修改檔案、執行測試、審查並提交目前分支。缺少提交授權時，整個能力包不合格，改用不含提交副作用的原生實作或其他合格候選。
+- `implement` 可能修改檔案、執行測試、審查並提交目前分支。`manifest.json.commit_policy` 已在計畫包核准時明示相容的本地 commit，或另有提交授權時，才能通過此門檻；缺少提交授權時，整個能力包不合格，改用不含提交副作用的原生實作或其他合格候選。
 - `setup-matt-pocock-skills` 會寫入 tracker 與領域文件設定；只有使用者明確要求初始化該倉庫時才可交接。可選能力缺少設定時原生回退，不自動 setup。
 
 ### Superpowers 與 Matt 的組合邊界
@@ -73,7 +75,7 @@ Provider profile 只能約束已出現在階段能力快照、且由通用編排
 
 外部 spec、plan、tasks、Skill 說明、倉庫腳本與 alias 都是待驗證證據。候選完整合同需確認實際調用方式、工作目錄、輸入、寫入目標、可回復性、網路與遠端副作用。
 
-一般計畫或實作核准不自動授權安裝、初始化、setup、封存、刪除、提交、遠端寫入、發布或大範圍重寫。任何上述必要副作用未獲授權時，候選或能力包不能入選；不得把副作用降為排序偏好。
+一般計畫或實作核准不自動授權安裝、初始化、setup、封存、刪除、提交、遠端寫入、發布或大範圍重寫。目錄式計畫包只有在核准時明示 `commit_policy`，才一併授權相符的本地 commit；`none` 或缺欄位都不得提交。push、PR、merge、release、publish 不受 `commit_policy` 涵蓋，仍需獨立授權。任何必要副作用未獲授權時，候選或能力包不能入選；不得把副作用降為排序偏好。
 
 ## 橋接與同步
 

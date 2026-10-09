@@ -405,7 +405,22 @@
 - 原生需求以 `AC-* → S-* → T-*` 串接驗收、實作切片與測試情境；測試設計再以 `D-*` 與 `RUN-*` 唯一擁有資料和執行命令。
 - 需求計畫只記錄測試 seam、驗證關卡與整體通過標準，不複製測試設計的詳細案例、命令與逐情境結果。
 - 活動 Matt 產物仍展開 Provider 映射，以 tracker 識別字保留 `to-spec`／`to-tickets` 的唯一可寫所有權、完整性與同步方向，不複製完整 spec 或 tickets；需求級工作流所有者與階段能力執行者分開記錄。
-- 兩項文件都分開記錄計畫／設計決策狀態與交付／執行狀態；AI 協作成效未明確啟用時不加入。
+- 兩項文件都保留計畫／設計決策狀態；交付／執行狀態只寫入各自的 `execution.json`。AI 協作成效未明確啟用時不加入。
+
+## 情境二十八：核准計畫包交給隔離 worktree 執行
+
+### 輸入
+
+需求計畫包已核准，預計由 Superpowers 在隔離 worktree 執行。`docs/plans/` 被 Git 忽略，使用者同意本地逐 Task commit，但沒有授權任何遠端動作。
+
+### 檢核表
+
+- 核准時由 `manifest.json` 綁定 `design.md`、`delivery.md`、`implementation.md`、`test-design.md` 的 SHA-256，並一次記錄 `execution_mode`、`worktree_policy`、`commit_policy`。
+- 複製前驗證來源，只 materialize manifest allowlist；不得複製秘密、未核准文件或來源 `execution.json`。
+- 在隔離 worktree 的相同相對路徑建立計畫包，複製後重新計算 SHA-256，並建立綁定目標 manifest 的新 `execution.json`。
+- 執行前再次重驗 manifest 與策略；不符時停止，不重新產生 manifest 掩蓋差異。
+- `implementation.md` 直接交給 executing-plans 或 subagent-driven-development，不先轉成第二套計畫格式。
+- 本地逐 Task commit 屬已核准 `commit_policy`；push、PR、merge、release、publish 均保持獨立授權，不因本地實作完成而自動執行。
 
 ## 動態 Skill 編排行為矩陣
 

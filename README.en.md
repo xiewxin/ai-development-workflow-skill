@@ -35,15 +35,20 @@ AI collaboration metrics and local timing are disabled by default. They are enab
 - When one external workflow safely and completely covers the request, this Skill exits extra orchestration. Failures degrade according to actual side effects and are never reported as provider success.
 - The integration never installs, sets up, initializes, commits, archives, deletes, performs remote writes, or publishes without explicit authorization.
 
-For Matt Pocock Skills, installation alone does not create a candidate. Existing `to-spec` or `to-tickets` artifacts may retain their approved ownership, while `to-tickets` remains conditional and User-invoked. A workflow such as `implement` that may create a commit is ineligible without separate commit authorization.
+For Matt Pocock Skills, installation alone does not create a candidate. Existing `to-spec` or `to-tickets` artifacts may retain their approved ownership, while `to-tickets` remains conditional and User-invoked. A workflow such as `implement` that may create a commit is ineligible unless the approved plan package explicitly grants a compatible local `commit_policy` or the user grants commit authorization separately.
 
 ## Requirement Planning Features
 
+- Every new requirement gets a `docs/plans/YYYY-MM-DD-<topic>/` package. `design.md`, `delivery.md`, `implementation.md`, `test-design.md`, `manifest.json`, and `execution.json` have separate ownership; legacy flat plans are read-only compatibility inputs and are never moved or deleted automatically.
+- `implementation.md` is the single execution entry point. Superpowers `executing-plans` or `subagent-driven-development` can consume it without format conversion after passing the [compatibility matrix](skills/ai-development-workflow/references/plan-package.md#superpowers-相容性矩陣).
+- An external approval record binds the four formal Markdown SHA-256 hashes, source revision, execution ID, and execution, worktree, and local commit policies. After optional task derivation, finalize `manifest.json` and record its single-execution receipt. Approved documents stay immutable and the latest external state controls their validity; `execution.json` owns observed commands, tests, task status, and commit SHAs.
+- `docs/plans/` remains Git-ignored and must not be committed. Isolated-worktree materialization copies only the manifest allowlist to the same relative path and revalidates it before copying, after copying, and before execution. Push, PR, merge, release, publish, deployment, and other remote writes always require separate authorization.
+- `tasks/` is absent by default. It is derived from the approved `implementation.md` only for parallel, cross-session, cross-repository, or high-risk isolation work, and each task binds its parent SHA, task ID, acceptance criteria, dependencies, and allowed files.
 - Investigates discoverable facts before asking questions, then confirms only decisions that can change scope, contracts, architecture, test seams, or acceptance criteria.
 - Reads existing relevant domain context, context maps, and ADRs on demand, verifies them against current code, and does not create extra decision documents merely to fill a format.
 - Adds user-observable behavior and acceptance scenarios only when they help define the requirement; it does not generate long user-story lists to fill a template.
-- Uses a compact profile for small single-repository work without external artifacts or high-spread risk: six core plan headings and five core test-design headings. Complex work expands the full field catalog only when needed.
-- Connects acceptance, slices, scenarios, data, and execution through `AC-* → S-* → T-* → D-* / RUN-*`. Concrete commands and per-scenario results have one owner in the test design instead of drifting across documents.
+- Uses a compact profile for small single-repository work without external artifacts or high-spread risk. The legacy six core plan headings are historical reading guidance; new packages distribute content by artifact ownership and may use five core test-design headings. Complex work expands the field catalog only when needed.
+- Connects acceptance, slices, scenarios, data, and execution through `AC-* → S-* → T-* → D-* / RUN-*`. Planned commands belong to the test design; observed commands and per-scenario results belong only to `execution.json`.
 - Chooses the highest stable user-observable public interface as the preferred test seam. If an existing lower-level test cannot verify the visible contract, a new test may be added at that public interface with approval.
 - Organizes work into independently verifiable vertical slices with blockers and completion criteria. Wide refactors use `expand → migrate → contract` with an integration gate.
 

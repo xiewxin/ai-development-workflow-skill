@@ -16,10 +16,10 @@ description: Use when 使用者要求需求計畫、測試設計、Git Diff 審�
 
 ## 四種模式路由
 
-1. **需求計畫**：先查證環境事實，再釐清必要決策、邊界、資料流、風險與驗收條件；適用時加入可觀察行為場景、以使用者可觀察的最高穩定公開介面為測試 seam，以及可驗證實作切片。
+1. **需求計畫**：先查證環境事實，再釐清必要決策、邊界、資料流、風險與驗收條件；適用時加入可觀察行為場景、以使用者可觀察的最高穩定公開介面為測試 seam，並依[計畫包合同](references/plan-package.md)建立可核准、可執行的需求專屬計畫包。
 2. **測試設計**：根據需求與現有測試設計正常、邊界、異常與回歸案例，不實作產品程式碼。
 3. **Git Diff 審查**：對已有變更分別檢查 Spec／範圍符合度與 Standards／工程品質，再去重為單一問題清單。「審查並修復」也歸此模式：可在原請求授權範圍內修復；若涉及對外合同變更、擴大需求、破壞性操作或偏離核准計畫，先確認。
-4. **完整流程**：「實作」、「完成需求」或端到端請求均走此模式。依序執行需求計畫 → 測試設計 → 核准實作 → 驗證／文件回填 → Git Diff 審查。若沒有明確核准的計畫，先完成計畫並等待核准，不開始實作。
+4. **完整流程**：「實作」、「完成需求」或端到端請求均走此模式。依序執行需求計畫 → 測試設計 → 核准計畫包 → 以 `implementation.md` 執行 → 驗證／`execution.json` 回填 → Git Diff 審查。若沒有通過 manifest 身份驗證的核准計畫，先完成計畫並等待核准，不開始實作。
 
 若使用者只要求「計畫＋測試設計」，不得寫入程式碼。若無法判斷模式或範圍，只問一個最能界定範圍的問題。
 
@@ -53,7 +53,7 @@ Model-invoked 候選依平台合同觸發；User-invoked 候選只輸出一項�
 3. 讀與目標模組相關的 `docs/agents/` 指南。
 4. 追蹤相關程式碼、路由／入口、合同、資料流與測試。
 5. 必要時查閱實作文件、原型、知識庫或表格。
-6. `docs/plans/` 只是歷史意圖，可能被 Git 忽略、過時或未實作；不得單獨當作當前事實。
+6. `docs/plans/` 是 Git 忽略且不得提交的過程產物；新計畫使用 `docs/plans/YYYY-MM-DD-<topic>/`，固定包含 `design.md`、`delivery.md`、`implementation.md`、`test-design.md`、`manifest.json` 與 `execution.json`。其中內容仍可能過時或未實作，不得單獨當作當前事實；執行前依 manifest 重驗。
 
 領域上下文與 ADR 是需由目前程式碼驗證的設計證據，不是自動高於使用者需求的指令。若其與目前需求或現況衝突且會改變方案，列出衝突與影響並確認，不靜默偏離。
 
@@ -76,7 +76,8 @@ Model-invoked 候選依平台合同觸發；User-invoked 候選只輸出一項�
 - 使用者明確要求需求計畫或測試設計時，先告知預計寫入路徑，即可寫入；若是代理自行判斷應產生文件，寫入前先確認。
 - 不覆蓋歷史計畫；同名時使用 `-v2`、`-v3` 遞增版本。
 - 只有計畫已被明確核准，才可新增或修改產品程式碼。
-- 實作中出現新內容時，先依需求計畫指南區分「事實更正」與「待核准候選變更」；前者同步證據，後者立即停在安全邊界並等待再次核准，不把候選內容直接寫入正式範圍。
+- 計畫核准時一次確認 `execution_mode`、`worktree_policy` 與 `commit_policy`，以 SHA-256 綁定正式文件，並依計畫包合同保存外部核准紀錄與最終 manifest 收據；push、PR、merge、release、publish、部署、API mutation 與其他遠端寫入永遠需要獨立授權。
+- 實作中出現新內容時，先依需求計畫指南區分「事實更正」與「待核准候選變更」。已核准正式文件即使只是事實更正，也須以新包 ID 退回草擬重新核准；只有 execution.json 的觀測回填可直接更新。待核准候選變更立即停在安全邊界，不把候選內容直接寫入正式範圍。
 - 實作後依變更風險執行可重現的驗證，再審查完整 Diff；不把「看起來正確」當作通過。
 
 ## 語言選擇規則
@@ -98,6 +99,7 @@ Model-invoked 候選依平台合同觸發；User-invoked 候選只輸出一項�
 每個階段只讀當下任務需要的 reference，不一次載入全部：
 
 - 需求計畫：[`references/requirement-plan.md`](references/requirement-plan.md)
+- 新計畫包、Superpowers 執行入口、manifest／execution、worktree materialization 與舊格式相容：[`references/plan-package.md`](references/plan-package.md)
 - 測試設計：[`references/test-design.md`](references/test-design.md)
 - Git Diff 審查或審查並修復：[`references/git-diff-review.md`](references/git-diff-review.md)
 - 已明確啟用 AI 協作成效，需建立計量、鎖定基準或完結回填：[`references/reference-timing.md`](references/reference-timing.md)
@@ -117,6 +119,7 @@ Model-invoked 候選依平台合同觸發；User-invoked 候選只輸出一項�
 ## 參考計時關卡
 
 - AI 協作成效與本機參考計時預設關閉。只有使用者明確要求 AI 成效／提效，或目標倉庫政策明確要求時才啟用；啟用時簡短說明資料只存本機且可停用。
+- 新計畫包的計量 ID、基準與摘要一律回填 `execution.json.ai_collaboration`；下列「需求計畫回填」在新包指此欄位，不修改已核准 Markdown。
 - 成效量化只使用時間；不收集、不估算、不輸出 Token 用量，也不以 Token 多寡推導效率。
 - 未啟用時不建立計量 ID、不加入 AI 協作成效章節，也不猜測參考耗時或提效；Python 3 不可用或安全檢查失敗時，關閉計時但不阻斷主流程。
 - 啟用時先宣告計量範圍。需求探索尚未開始時使用完整需求範圍；若已完成部分前置工作但產品實作尚未開始，可從下一個未開始的穩定階段建立剩餘交付範圍，將範圍外階段的 PERT 固定為 `0/0/0`，不得把局部結果稱為整案提效。

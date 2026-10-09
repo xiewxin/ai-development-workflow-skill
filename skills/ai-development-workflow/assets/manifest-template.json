@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "plan_package_id": "{{INPUT:plan-package-id}}",
+  "source_revision": "{{INPUT:40-or-64-lowercase-hex}}",
+  "execution_id": "{{INPUT:single-execution-id}}",
+  "status": "{{INPUT:draft|approved|superseded}}",
+  "approved_at": "{{INPUT:ISO-8601-or-null}}",
+  "finalized_at": "{{INPUT:ISO-8601-or-null}}",
+  "approval_record": "{{INPUT:user-visible-conversation-or-tracker-identifier}}",
+  "files": {
+    "design.md": {
+      "algorithm": "sha256",
+      "sha256": "{{INPUT:64-lowercase-hex}}"
+    },
+    "delivery.md": {
+      "algorithm": "sha256",
+      "sha256": "{{INPUT:64-lowercase-hex}}"
+    },
+    "implementation.md": {
+      "algorithm": "sha256",
+      "sha256": "{{INPUT:64-lowercase-hex}}"
+    },
+    "test-design.md": {
+      "algorithm": "sha256",
+      "sha256": "{{INPUT:64-lowercase-hex}}"
+    }
+  },
+  "execution_mode": "{{INPUT:inline|executing-plans|subagent-driven-development|provider}}",
+  "worktree_policy": "{{INPUT:current-checkout|isolated-worktree}}",
+  "commit_policy": "{{INPUT:none|task-local-commits|final-local-commit}}",
+  "derived_tasks": [],
+  "authorization": {
+    "external_actions": {
+      "push": "separate_authorization",
+      "pull_request": "separate_authorization",
+      "merge": "separate_authorization",
+      "release": "separate_authorization",
+      "publish": "separate_authorization",
+      "deploy": "separate_authorization",
+      "remote_write": "separate_authorization",
+      "api_mutation": "separate_authorization"
+    }
+  }
+}

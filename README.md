@@ -35,11 +35,16 @@
 
 ## 需求計畫特性
 
+- 每個新需求建立 `docs/plans/YYYY-MM-DD-<topic>/` 計畫包：`design.md`、`delivery.md`、`implementation.md`、`test-design.md`、`manifest.json` 與 `execution.json` 各自擁有單一職責；舊平鋪計畫只讀相容，不自動搬移或刪除。
+- `implementation.md` 是原生與外部執行型工作流的統一入口；Superpowers `executing-plans` 或 `subagent-driven-development` 通過[相容性矩陣](skills/ai-development-workflow/references/plan-package.md#superpowers-相容性矩陣)後可直接逐 Task 執行，不需要格式轉換。
+- 外部核准紀錄綁定四份正式文件的 SHA-256、來源 revision、execution ID 與 execution、worktree、本地 commit 策略；條件式 Task 派生完成後最終化 `manifest.json` 並記錄一次性執行收據。核准文件保持不可變，最新外部狀態決定其效力；`execution.json` 擁有實際命令、測試、Task 狀態和 commit SHA。
+- `docs/plans/` 保持 Git 忽略且不得提交。隔離 worktree 只 materialize manifest allowlist，使用相同相對路徑並在複製前、複製後及執行前重驗；push、PR、merge、release、publish、部署與其他遠端寫入永遠需要獨立授權。
+- `tasks/` 預設不生成；只有並行、跨會話、跨倉庫或高風險隔離時，才從已核准 `implementation.md` 派生並綁定父計畫 SHA、Task ID、驗收、依賴與 allowed files。
 - 先自行查證環境事實，再對會改變範圍、合同或方案的決策逐題確認並附建議答案。
 - 按需讀取現有領域上下文、決策地圖與 ADR，對照目前程式碼驗證；不為補格式建立額外文件。
 - 只在適用時整理使用者或外部系統可觀察的行為與驗收場景，不為湊格式產生冗長 User Stories。
-- 小型、單倉庫且沒有外部產物或高擴散風險的需求使用緊湊檔位；需求計畫以六個核心標題、測試設計以五個核心標題交付，複雜需求才展開完整欄位目錄。
-- 使用 `AC-* → S-* → T-* → D-*／RUN-*` 串接驗收、切片、情境、資料與執行；具體命令及逐情境結果只由測試設計擁有，避免跨文件漂移。
+- 小型、單倉庫且沒有外部產物或高擴散風險的需求使用緊湊檔位；舊需求計畫的六個核心標題只保留歷史讀取語義，新計畫包按各文件職責分配內容，測試設計可用五個核心標題，複雜需求才展開完整欄位目錄。
+- 使用 `AC-* → S-* → T-* → D-*／RUN-*` 串接驗收、切片、情境、資料與執行；預計命令只由測試設計擁有，實際命令與逐情境結果只由 `execution.json` 擁有。
 - 優先選擇使用者可觀察的最高且穩定公開介面作為測試 seam；既有低層測試不能充分驗證可見合同時，可在該公開介面新增測試並取得核准。
 - 實作以可獨立驗證的垂直切片、阻塞關係與完成判準排序；Wide refactor 採 `expand → migrate → contract` 並設整合關卡。
 
@@ -156,7 +161,7 @@ bash tests/test-validate-publication.sh
 bash scripts/validate-publication.sh
 ```
 
-validator 在倉庫模式掃描公開工作目錄（排除 `.git`、`.idea` 及明確定義為 Git 忽略過程產物的 `docs/plans/`、`docs/specs/`），檢查 Skill 結構、元資料、參考計時腳本、Markdown 相對連結、基本範本章節、可選 AI 成效範本的完整欄位、繁體中文及疑似敏感資訊。其他相似目錄不會被排除；錯誤只列出相對路徑、規則與必要行號，不回顯命中內容。
+validator 在倉庫模式掃描公開工作目錄（排除 `.git`、`.idea` 及明確定義為 Git 忽略過程產物的 `docs/plans/`、`docs/specs/`），檢查 Skill 結構、元資料、參考計時腳本、Markdown 相對連結、計畫包 Markdown／JSON 範本、可選 AI 成效範本的完整欄位、繁體中文及疑似敏感資訊。其他相似目錄不會被排除；錯誤只列出相對路徑、規則與必要行號，不回顯命中內容。
 
 Skill 執行時的互動語言跟隨使用者，文件與程式碼跟隨目標倉庫規範；本倉庫 publication validator 的繁體中文檢查只保護本倉庫公開文件，不會把繁體中文強制套用到其他目標倉庫。
 

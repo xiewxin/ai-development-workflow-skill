@@ -34,6 +34,7 @@ import os
 import re
 import stat
 import sys
+from datetime import datetime
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
@@ -116,9 +117,16 @@ required_files = [
     "references/reference-timing.md",
     "references/skill-orchestration.md",
     "references/workflow-integration.md",
+    "references/plan-package.md",
     "assets/requirement-plan-template.md",
     "assets/ai-collaboration-section-template.md",
     "assets/test-design-template.md",
+    "assets/design-template.md",
+    "assets/delivery-template.md",
+    "assets/implementation-template.md",
+    "assets/task-template.md",
+    "assets/manifest-template.json",
+    "assets/execution-template.json",
     "scripts/measure.py",
 ]
 for required in required_files:
@@ -511,6 +519,413 @@ def validate_section_fields(
             add_error(path, rule)
 
 
+def unique_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    """Reject duplicate keys at every nesting level before schema validation."""
+    value: dict[str, object] = {}
+    for key, item in pairs:
+        if key in value:
+            raise ValueError("Duplicate JSON key")
+        value[key] = item
+    return value
+
+
+def load_json_template(path: Path) -> dict[str, object] | None:
+    """Load a required JSON template without echoing private or malformed data."""
+    if not path.is_file() or path.is_symlink():
+        return None
+    try:
+        value = json.loads(read_text(path), object_pairs_hook=unique_json_object)
+    except ValueError:
+        add_error(path, "計畫包 JSON")
+        return None
+    if not isinstance(value, dict):
+        add_error(path, "計畫包 JSON")
+        return None
+    return value
+
+
+def require_mapping_keys(
+    path: Path,
+    value: object,
+    required: set[str],
+    rule: str,
+    optional: set[str] | None = None,
+) -> dict[str, object] | None:
+    """Require an exact schema, with only explicitly supported optional keys."""
+    if (
+        not isinstance(value, dict)
+        or not required.issubset(value)
+        or not set(value).issubset(required | (optional or set()))
+    ):
+        add_error(path, rule)
+        return None
+    return value
+
+
+def validate_plan_package_json() -> None:
+    """Check public template semantics, not approval or real package bytes."""
+    sha_placeholder = "{{INPUT:64-lowercase-hex}}"
+    time_placeholder = "{{INPUT:ISO-8601-or-null}}"
+
+    def text_value(value: object, placeholder: str | None = None) -> bool:
+        return isinstance(value, str) and bool(value.strip()) and (
+            "{{" not in value or value == placeholder
+        )
+
+    def sha(value: object) -> bool:
+        return value == sha_placeholder or (
+            isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value) is not None
+        )
+
+    def timestamp(value: object) -> bool:
+        if value is None or value == time_placeholder:
+            return True
+        if not isinstance(value, str):
+            return False
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00")).tzinfo is not None
+        except ValueError:
+            return False
+
+    def enum(value: object, choices: tuple[str, ...], template: bool = False) -> bool:
+        return value in choices or (template and value == "{{INPUT:" + "|".join(choices) + "}}")
+
+    def commit(value: object) -> bool:
+        return value is None or (
+            isinstance(value, str) and re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", value) is not None
+        )
+
+    def identifier(value: object, prefix: str) -> bool:
+        return isinstance(value, str) and re.fullmatch(prefix + r"-[0-9]{2,}", value) is not None
+
+    def relative_path(value: object) -> bool:
+        return isinstance(value, str) and bool(value) and not (
+            value.startswith("/") or "\\" in value or ":" in value or "{{" in value
+            or any(part in ("", "..") for part in value.split("/"))
+        )
+
+    def check(path: Path, condition: bool, kind: str) -> None:
+        if not condition:
+            add_error(path, kind + " 欄位")
+
+    manifest_path = skill_root / "assets" / "manifest-template.json"
+    manifest = load_json_template(manifest_path)
+    if manifest is not None:
+        require_mapping_keys(
+            manifest_path,
+            manifest,
+            {
+                "schema_version",
+                "plan_package_id",
+                "source_revision",
+                "execution_id",
+                "status",
+                "approved_at",
+                "finalized_at",
+                "approval_record",
+                "derived_tasks",
+                "files",
+                "execution_mode",
+                "worktree_policy",
+                "commit_policy",
+                "authorization",
+            },
+            "manifest 欄位",
+        )
+        check(manifest_path, type(manifest.get("schema_version")) is int and manifest["schema_version"] == 1, "manifest")
+        check(manifest_path, text_value(manifest.get("plan_package_id"), "{{INPUT:plan-package-id}}"), "manifest")
+        check(manifest_path, manifest.get("source_revision") == "{{INPUT:40-or-64-lowercase-hex}}" or (manifest.get("source_revision") is not None and commit(manifest.get("source_revision"))), "manifest")
+        check(manifest_path, text_value(manifest.get("execution_id"), "{{INPUT:single-execution-id}}"), "manifest")
+        check(manifest_path, enum(manifest.get("status"), ("draft", "approved", "superseded"), True), "manifest")
+        check(manifest_path, enum(manifest.get("execution_mode"), ("inline", "executing-plans", "subagent-driven-development", "provider"), True), "manifest")
+        check(manifest_path, enum(manifest.get("worktree_policy"), ("current-checkout", "isolated-worktree"), True), "manifest")
+        check(manifest_path, enum(manifest.get("commit_policy"), ("none", "task-local-commits", "final-local-commit"), True), "manifest")
+        for field in ("approved_at", "finalized_at"):
+            check(manifest_path, timestamp(manifest.get(field)), "manifest")
+        check(manifest_path, text_value(manifest.get("approval_record"), "{{INPUT:user-visible-conversation-or-tracker-identifier}}"), "manifest")
+        if manifest.get("status") == "approved":
+            check(manifest_path, manifest.get("approved_at") not in (None, time_placeholder), "manifest")
+        if manifest.get("finalized_at") not in (None, time_placeholder):
+            check(manifest_path, manifest.get("status") in ("approved", "superseded"), "manifest")
+        files = require_mapping_keys(
+            manifest_path,
+            manifest.get("files"),
+            {"design.md", "delivery.md", "implementation.md", "test-design.md"},
+            "manifest 欄位",
+        )
+        if files is not None:
+            if set(files) != {
+                "design.md",
+                "delivery.md",
+                "implementation.md",
+                "test-design.md",
+            }:
+                add_error(manifest_path, "manifest 欄位")
+            for metadata in files.values():
+                item = require_mapping_keys(
+                    manifest_path,
+                    metadata,
+                    {"algorithm", "sha256"},
+                    "manifest 欄位",
+                )
+                if item is not None and item.get("algorithm") != "sha256":
+                    add_error(manifest_path, "manifest 欄位")
+                if item is not None:
+                    check(manifest_path, sha(item.get("sha256")), "manifest")
+        derived = manifest.get("derived_tasks")
+        check(manifest_path, isinstance(derived, list), "manifest")
+        seen_tasks: set[str] = set()
+        if isinstance(derived, list):
+            for task in derived:
+                item = require_mapping_keys(manifest_path, task, {"task_id", "path", "sha256", "parent_implementation_sha256"}, "manifest 欄位")
+                if item is None:
+                    continue
+                task_id = item.get("task_id")
+                valid_id = identifier(task_id, "S")
+                check(manifest_path, valid_id and task_id not in seen_tasks, "manifest")
+                if valid_id:
+                    seen_tasks.add(task_id)
+                check(manifest_path, valid_id and item.get("path") == f"tasks/{task_id}.md", "manifest")
+                for field in ("sha256", "parent_implementation_sha256"):
+                    check(manifest_path, sha(item.get(field)) and item.get(field) != sha_placeholder, "manifest")
+                parent = files.get("implementation.md") if isinstance(files, dict) else None
+                check(manifest_path, isinstance(parent, dict) and item.get("parent_implementation_sha256") == parent.get("sha256"), "manifest")
+        authorization = require_mapping_keys(
+            manifest_path,
+            manifest.get("authorization"),
+            {"external_actions"},
+            "manifest 欄位",
+        )
+        if authorization is not None:
+            external = require_mapping_keys(
+                manifest_path,
+                authorization.get("external_actions"),
+                {"push", "pull_request", "merge", "release", "publish", "deploy", "remote_write", "api_mutation"},
+                "manifest 欄位",
+            )
+            if external is not None and any(
+                value != "separate_authorization" for value in external.values()
+            ):
+                add_error(manifest_path, "manifest 欄位")
+
+    execution_path = skill_root / "assets" / "execution-template.json"
+    execution = load_json_template(execution_path)
+    if execution is not None:
+        require_mapping_keys(
+            execution_path,
+            execution,
+            {"schema_version", "plan_package_id", "execution_id", "manifest_sha256", "base_commit_sha", "status", "started_at", "finished_at", "worktree", "tasks", "cumulative_verification", "final_commit_sha", "final_diff_review", "deviations", "remaining_risks"},
+            "execution 欄位",
+            optional={"ai_collaboration"},
+        )
+        check(execution_path, type(execution.get("schema_version")) is int and execution["schema_version"] == 1, "execution")
+        check(execution_path, text_value(execution.get("plan_package_id"), "{{INPUT:plan-package-id}}"), "execution")
+        check(execution_path, text_value(execution.get("execution_id"), "{{INPUT:single-execution-id}}"), "execution")
+        check(execution_path, sha(execution.get("manifest_sha256")), "execution")
+        states = ("not_started", "in_progress", "partial", "completed", "blocked", "superseded")
+        reviews = ("not_run", "passed", "failed", "blocked")
+        check(execution_path, enum(execution.get("status"), states), "execution")
+        check(execution_path, enum(execution.get("final_diff_review"), reviews), "execution")
+        check(execution_path, commit(execution.get("final_commit_sha")), "execution")
+        check(execution_path, commit(execution.get("base_commit_sha")), "execution")
+        for field in ("started_at", "finished_at"):
+            check(execution_path, timestamp(execution.get(field)), "execution")
+        worktree = execution.get("worktree")
+        check(execution_path, worktree is None or relative_path(worktree) or worktree == "{{INPUT:repository-relative-identity-or-null}}", "execution")
+        if manifest is not None:
+            for field in ("plan_package_id", "execution_id"):
+                check(execution_path, execution.get(field) == manifest.get(field), "execution")
+            if execution.get("base_commit_sha") is not None:
+                check(execution_path, execution.get("base_commit_sha") == manifest.get("source_revision"), "execution")
+            if manifest.get("commit_policy") in ("none", "task-local-commits"):
+                check(execution_path, execution.get("final_commit_sha") is None, "execution")
+
+        def observed_time(value: object) -> bool:
+            return value not in (None, time_placeholder) and timestamp(value)
+
+        if execution.get("status") == "not_started":
+            check(execution_path, execution.get("started_at") is None and execution.get("finished_at") is None, "execution")
+        else:
+            check(execution_path, observed_time(execution.get("started_at")) and execution.get("base_commit_sha") is not None, "execution")
+        if execution.get("finished_at") is not None:
+            check(execution_path, observed_time(execution.get("finished_at")), "execution")
+        if observed_time(execution.get("started_at")) and observed_time(execution.get("finished_at")):
+            check(execution_path, datetime.fromisoformat(execution["finished_at"].replace("Z", "+00:00")) >= datetime.fromisoformat(execution["started_at"].replace("Z", "+00:00")), "execution")
+
+        command_run_ids: set[str] = set()
+        test_run_ids: list[str] = []
+
+        def latest_tests_passed(items: object, command_items: object) -> bool:
+            if not isinstance(items, list) or not items:
+                return False
+            if not isinstance(command_items, list):
+                return False
+            task_runs = {
+                item.get("run_id"): item
+                for item in command_items
+                if isinstance(item, dict) and isinstance(item.get("run_id"), str)
+            }
+            latest: dict[str, dict] = {}
+            for item in items:
+                if not isinstance(item, dict) or not isinstance(item.get("test_id"), str):
+                    return False
+                latest[item["test_id"]] = item
+            return all(
+                item.get("status") == "passed"
+                and isinstance(item.get("run_id"), str)
+                and isinstance(task_runs.get(item.get("run_id")), dict)
+                and task_runs[item["run_id"]].get("exit_code") == 0
+                and task_runs[item["run_id"]].get("result") != "not_run"
+                for item in latest.values()
+            )
+
+        def latest_cumulative_passed(items: object) -> bool:
+            if not isinstance(items, list) or not items:
+                return False
+            latest: dict[tuple[str, str, str], dict] = {}
+            for item in items:
+                if not isinstance(item, dict) or item.get("result") == "not_run":
+                    return False
+                planned, actual, workdir = (item.get(key) for key in ("planned_run_id", "actual", "workdir"))
+                if not isinstance(actual, str) or not isinstance(workdir, str):
+                    return False
+                if planned is not None and not isinstance(planned, str):
+                    return False
+                key = ("planned", planned, workdir) if planned is not None else ("actual", actual, workdir)
+                latest[key] = item
+            return all(item.get("exit_code") == 0 for item in latest.values())
+
+        def commands(items: object) -> None:
+            check(execution_path, isinstance(items, list), "execution")
+            if not isinstance(items, list):
+                return
+            for command in items:
+                record = require_mapping_keys(execution_path, command, {"run_id", "planned_run_id", "workdir", "actual", "recorded_at", "exit_code", "result"}, "execution 欄位")
+                if record is None:
+                    continue
+                check(execution_path, identifier(record.get("run_id"), "RUN"), "execution")
+                run_id = record.get("run_id")
+                if isinstance(run_id, str):
+                    check(execution_path, run_id not in command_run_ids, "execution")
+                    command_run_ids.add(run_id)
+                check(execution_path, record.get("planned_run_id") is None or identifier(record.get("planned_run_id"), "RUN"), "execution")
+                workdir = record.get("workdir")
+                check(execution_path, relative_path(workdir) or workdir == "{{INPUT:repository-relative-path}}", "execution")
+                check(execution_path, timestamp(record.get("recorded_at")), "execution")
+                check(execution_path, text_value(record.get("result")), "execution")
+                if record.get("result") == "not_run":
+                    check(execution_path, all(record.get(key) is None for key in ("actual", "recorded_at", "exit_code")), "execution")
+                else:
+                    check(execution_path, text_value(record.get("actual")) and type(record.get("exit_code")) is int and record.get("recorded_at") not in (None, time_placeholder), "execution")
+
+        tasks = execution.get("tasks")
+        execution_task_ids: set[str] = set()
+        if not isinstance(tasks, list) or not tasks:
+            add_error(execution_path, "execution 欄位")
+        else:
+            for task in tasks:
+                item = require_mapping_keys(
+                    execution_path,
+                    task,
+                    {"task_id", "status", "changed_files", "commands", "tests", "diff_review", "commit_sha"},
+                    "execution 欄位",
+                )
+                if item is None:
+                    continue
+                check(execution_path, identifier(item.get("task_id"), "S"), "execution")
+                task_id = item.get("task_id")
+                if isinstance(task_id, str):
+                    check(execution_path, task_id not in execution_task_ids, "execution")
+                    execution_task_ids.add(task_id)
+                check(execution_path, enum(item.get("status"), states), "execution")
+                check(execution_path, enum(item.get("diff_review"), reviews), "execution")
+                check(execution_path, commit(item.get("commit_sha")), "execution")
+                if manifest is not None and manifest.get("commit_policy") in ("none", "final-local-commit"):
+                    check(execution_path, item.get("commit_sha") is None, "execution")
+                if execution.get("status") == "not_started":
+                    check(execution_path, item.get("status") == "not_started", "execution")
+                changed = item.get("changed_files")
+                check(execution_path, isinstance(changed, list) and all(relative_path(path) for path in changed), "execution")
+                commands(item.get("commands"))
+                tests = item.get("tests")
+                check(execution_path, isinstance(tests, list), "execution")
+                if isinstance(tests, list):
+                    for test in tests:
+                        record = require_mapping_keys(execution_path, test, {"test_id", "run_id", "actual", "recorded_at", "evidence", "status"}, "execution 欄位")
+                        if record is None:
+                            continue
+                        check(execution_path, identifier(record.get("test_id"), "T") and identifier(record.get("run_id"), "RUN"), "execution")
+                        if isinstance(record.get("run_id"), str):
+                            test_run_ids.append(record["run_id"])
+                        check(execution_path, enum(record.get("status"), ("not_run", "passed", "failed", "blocked", "skipped")), "execution")
+                        check(execution_path, timestamp(record.get("recorded_at")), "execution")
+                        if record.get("status") == "not_run":
+                            check(execution_path, all(record.get(key) is None for key in ("actual", "recorded_at", "evidence")), "execution")
+                        else:
+                            check(execution_path, text_value(record.get("actual")) and text_value(record.get("evidence")) and record.get("recorded_at") not in (None, time_placeholder), "execution")
+                if item.get("status") == "completed":
+                    if manifest is not None and manifest.get("commit_policy") == "task-local-commits":
+                        check(execution_path, item.get("commit_sha") is not None and commit(item.get("commit_sha")), "execution")
+                    check(execution_path, item.get("diff_review") == "passed", "execution")
+                    command_records = item.get("commands")
+                    check(execution_path, latest_tests_passed(tests, command_records), "execution")
+                    check(execution_path, isinstance(command_records, list) and bool(command_records) and all(isinstance(command, dict) and command.get("result") != "not_run" for command in command_records), "execution")
+                    if isinstance(command_records, list) and command_records and isinstance(command_records[-1], dict):
+                        check(execution_path, command_records[-1].get("exit_code") == 0, "execution")
+        commands(execution.get("cumulative_verification"))
+        check(execution_path, all(run_id in command_run_ids for run_id in test_run_ids), "execution")
+        deviations = execution.get("deviations")
+        check(execution_path, isinstance(deviations, list), "execution")
+        if isinstance(deviations, list):
+            for deviation in deviations:
+                item = require_mapping_keys(execution_path, deviation, {"task_id", "original_step", "new_fact", "impact", "requires_reapproval", "resolution"}, "execution 欄位")
+                if item is not None:
+                    check(execution_path, type(item.get("requires_reapproval")) is bool, "execution")
+                    check(execution_path, item.get("task_id") is None or identifier(item.get("task_id"), "S"), "execution")
+                    check(execution_path, all(text_value(item.get(key)) for key in ("original_step", "new_fact", "impact", "resolution")), "execution")
+        risks = execution.get("remaining_risks")
+        check(execution_path, isinstance(risks, list) and all(text_value(risk) for risk in risks), "execution")
+        if "ai_collaboration" in execution:
+            ai_records = execution["ai_collaboration"]
+            check(execution_path, isinstance(ai_records, list) and all(text_value(item) for item in ai_records), "execution")
+        if execution.get("status") == "completed":
+            if manifest is not None and manifest.get("commit_policy") == "final-local-commit":
+                check(execution_path, execution.get("final_commit_sha") is not None and commit(execution.get("final_commit_sha")), "execution")
+            check(execution_path, observed_time(execution.get("finished_at")) and execution.get("final_diff_review") == "passed", "execution")
+            check(execution_path, isinstance(tasks, list) and bool(tasks) and all(isinstance(task, dict) and task.get("status") == "completed" for task in tasks), "execution")
+            cumulative = execution.get("cumulative_verification")
+            check(execution_path, latest_cumulative_passed(cumulative), "execution")
+
+
+validate_plan_package_json()
+
+
+validate_headings(
+    skill_root / "assets" / "design-template.md",
+    ["背景與為什麼", "做什麼", "架構與介面", "替代方案", "設計風險", "非目標"],
+)
+validate_headings(
+    skill_root / "assets" / "delivery-template.md",
+    ["狀態與來源", "目標與驗收", "範圍", "現況與證據", "交付風險", "文件處置", "最終驗收"],
+)
+validate_headings(
+    skill_root / "assets" / "implementation-template.md",
+    ["Global Constraints", "Final cumulative verification"],
+)
+implementation_template = skill_root / "assets" / "implementation-template.md"
+if implementation_template.is_file() and not implementation_template.is_symlink():
+    implementation_text = read_text(implementation_template)
+    for expected in (
+        "**Goal:**",
+        "**Interfaces:**",
+        "**Dependencies:**",
+        "Expected: FAIL",
+        "Expected: PASS",
+    ):
+        if expected not in implementation_text:
+            add_error(implementation_template, "implementation 欄位")
+
+
 validate_headings(
     skill_root / "assets" / "requirement-plan-template.md",
     [
@@ -620,8 +1035,8 @@ validate_headings(
         "手動驗證與可選唯讀 SQL",
         "回歸",
         "交付測試清單",
-        "自動化測試實施結果",
-        "偏差與剩餘風險",
+        "執行證據索引",
+        "設計限制與未覆蓋風險",
     ],
 )
 validate_section_fields(
