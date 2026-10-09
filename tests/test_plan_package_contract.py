@@ -10,6 +10,11 @@ ROOT = Path(__file__).resolve().parents[1]
 SKILL_ROOT = ROOT / "skills" / "ai-development-workflow"
 
 
+def copy_skill_fixture(source: Path, destination: Path) -> None:
+    """建立供發布驗證使用的獨立 Skill 夾具。"""
+    shutil.copytree(source, destination, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+
+
 class PlanPackageContractTest(unittest.TestCase):
     """驗證新生成計畫包的身份、職責與執行交接合同。"""
 
@@ -20,6 +25,34 @@ class PlanPackageContractTest(unittest.TestCase):
 
     def read_json(self, relative: str) -> dict:
         return json.loads(self.read(relative))
+
+    def test_publication_fixture_excludes_only_generated_bytecode(self) -> None:
+        """測試產生的快取不得混入夾具；其他二進位檔仍須被發布檢查拒絕。"""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            source = root / "source"
+            shutil.copytree(SKILL_ROOT, source)
+            cache = source / "scripts" / "__pycache__"
+            cache.mkdir(exist_ok=True)
+            (cache / "measure.cpython-312.pyc").write_bytes(b"\x00synthetic-bytecode")
+            (source / "scripts" / "measure.pyc").write_bytes(b"\x00synthetic-bytecode")
+            fixture = root / "clean-fixture"
+            copy_skill_fixture(source, fixture)
+            result = subprocess.run(
+                ["bash", str(ROOT / "scripts/validate-publication.sh"), str(fixture)],
+                capture_output=True, text=True, check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout)
+
+            (source / "scripts" / "unexpected.bin").write_bytes(b"\x00unexpected")
+            rejected_fixture = root / "rejected-fixture"
+            copy_skill_fixture(source, rejected_fixture)
+            result = subprocess.run(
+                ["bash", str(ROOT / "scripts/validate-publication.sh"), str(rejected_fixture)],
+                capture_output=True, text=True, check=False,
+            )
+            self.assertNotEqual(result.returncode, 0, result.stdout)
+            self.assertIn("scripts/unexpected.bin", result.stdout)
 
     def test_skill_routes_new_plans_to_one_directory_package(self) -> None:
         skill = self.read("SKILL.md")
@@ -242,7 +275,7 @@ class PlanPackageContractTest(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as temporary:
             fixture = Path(temporary).resolve() / "skill"
-            shutil.copytree(SKILL_ROOT, fixture)
+            copy_skill_fixture(SKILL_ROOT, fixture)
             baseline = subprocess.run(
                 ["bash", str(ROOT / "scripts/validate-publication.sh"), str(fixture)],
                 capture_output=True, text=True, check=False,
@@ -308,7 +341,7 @@ class PlanPackageContractTest(unittest.TestCase):
         execution["cumulative_verification"] = [{**command, "run_id": "RUN-02"}]
         with tempfile.TemporaryDirectory() as temporary:
             fixture = Path(temporary).resolve() / "skill"
-            shutil.copytree(SKILL_ROOT, fixture)
+            copy_skill_fixture(SKILL_ROOT, fixture)
             for kind, payload in (("manifest", manifest), ("execution", execution)):
                 (fixture / "assets" / f"{kind}-template.json").write_text(
                     json.dumps(payload), encoding="utf-8",
@@ -410,7 +443,7 @@ class PlanPackageContractTest(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as temporary:
             fixture = Path(temporary).resolve() / "skill"
-            shutil.copytree(SKILL_ROOT, fixture)
+            copy_skill_fixture(SKILL_ROOT, fixture)
             (fixture / "assets/manifest-template.json").write_text(json.dumps(manifest), encoding="utf-8")
             for name, tests, cumulative, accepted in cases:
                 with self.subTest(case=name):

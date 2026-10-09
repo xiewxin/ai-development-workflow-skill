@@ -45,4 +45,8 @@ jobs:
       - name: Show Python version
         run: python --version
       - name: Run Python contract tests
-        run: python -m unittest discover -s tests -p "test_*.py" -v
+        shell: bash
+        run: |
+          # Validator subprocesses must use this Bash, including Git Bash on Windows.
+          export PATH="$(dirname "$BASH"):$PATH"
+          python -m unittest discover -s tests -p "test_*.py" -v
