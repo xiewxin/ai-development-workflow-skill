@@ -1006,7 +1006,7 @@ sed -i.bak 's/, "commit_sha": null//' "${execution_file}"
 rm "${execution_file}.bak"
 expect_fail "execution 範本缺少 commit SHA" "${missing_execution_task_field_root}" "execution 欄位"
 
-# 完成狀態必須由同一 Task 的有效命令及測試證據支持。
+# 通過觀測必須引用同一 execution 內真正成功的命令。
 prepare_completed_execution() {
     local root="$1"
     local scenario="$2"
@@ -1024,8 +1024,22 @@ execution = json.loads(execution_path.read_text())
 revision = "a" * 40
 now = "2026-01-01T00:00:00+00:00"
 manifest["source_revision"] = revision
+manifest.update(status="approved", approved_at=now, finalized_at=now)
 execution.update(base_commit_sha=revision, status="completed", started_at=now,
-                 finished_at=now, final_diff_review="passed")
+                 finished_at=now, final_diff_review="passed", manifest_sha256="b" * 64)
+if scenario == "draft-manifest":
+    manifest.update(status="draft", approved_at=None, finalized_at=None)
+elif scenario == "unfinalized-manifest":
+    manifest["finalized_at"] = None
+elif scenario == "placeholder-manifest-digest":
+    execution["manifest_sha256"] = "{{INPUT:64-lowercase-hex}}"
+elif scenario == "superseded-execution":
+    execution["status"] = "superseded"
+elif scenario == "superseded-pair":
+    manifest["status"] = "superseded"
+    execution["status"] = "superseded"
+elif scenario == "completed-superseded-manifest":
+    manifest["status"] = "superseded"
 
 def command(run_id, planned_run_id, exit_code):
     return {"run_id": run_id, "planned_run_id": planned_run_id,
@@ -1046,9 +1060,18 @@ elif scenario == "cumulative-test-run":
     test_run = "RUN-03"
 elif scenario == "failed-cumulative-test-run":
     test_run = "RUN-03"
+elif scenario == "in-progress-failed-test-run":
+    test_run = "RUN-01"
+    task["status"] = "in_progress"
+    execution.update(status="in_progress", finished_at=None, final_diff_review="not_run")
 task["tests"] = [{"test_id": "T-01", "run_id": test_run,
                   "actual": "true", "recorded_at": now,
                   "evidence": "synthetic result", "status": "passed"}]
+if scenario in ("invalid-passed-history", "valid-failed-history"):
+    historical = dict(task["tests"][0], run_id="RUN-01")
+    if scenario == "valid-failed-history":
+        historical["status"] = "failed"
+    task["tests"].insert(0, historical)
 execution["cumulative_verification"] = [command("RUN-03", "RUN-12", 0)]
 if scenario == "failed-cumulative-test-run":
     execution["cumulative_verification"] = [command("RUN-03", "RUN-12", 1),
@@ -1077,6 +1100,30 @@ expect_pass "Task 測試可引用同一 execution 的累計驗證命令" "${cumu
 failed_cumulative_test_run_root="$(new_case failed-cumulative-test-run)"
 prepare_completed_execution "${failed_cumulative_test_run_root}" "failed-cumulative-test-run"
 expect_fail "通過測試不得引用失敗後已重試的累計命令" "${failed_cumulative_test_run_root}" "execution 欄位"
+
+in_progress_failed_test_run_root="$(new_case in-progress-failed-test-run)"
+prepare_completed_execution "${in_progress_failed_test_run_root}" "in-progress-failed-test-run"
+expect_fail "執行中測試也不得把失敗命令記為通過" "${in_progress_failed_test_run_root}" "execution 欄位"
+
+invalid_passed_history_root="$(new_case invalid-passed-history)"
+prepare_completed_execution "${invalid_passed_history_root}" "invalid-passed-history"
+expect_fail "後續成功不得掩蓋錯誤的歷史通過觀測" "${invalid_passed_history_root}" "execution 欄位"
+
+valid_failed_history_root="$(new_case valid-failed-history)"
+prepare_completed_execution "${valid_failed_history_root}" "valid-failed-history"
+expect_pass "合法 RED 失敗歷史與後續 GREEN 通過可保留" "${valid_failed_history_root}"
+
+for scenario in draft-manifest unfinalized-manifest placeholder-manifest-digest completed-superseded-manifest; do
+    invalid_lifecycle_root="$(new_case "${scenario}")"
+    prepare_completed_execution "${invalid_lifecycle_root}" "${scenario}"
+    expect_fail "已執行紀錄拒絕 ${scenario}" "${invalid_lifecycle_root}" "execution 欄位"
+done
+
+for scenario in superseded-execution superseded-pair; do
+    superseded_execution_root="$(new_case "${scenario}")"
+    prepare_completed_execution "${superseded_execution_root}" "${scenario}"
+    expect_pass "保留有效的 ${scenario} 歷史" "${superseded_execution_root}"
+done
 
 missing_measure_script_root="$(new_case missing-measure-script)"
 rm "${missing_measure_script_root}/skills/ai-development-workflow/scripts/measure.py"

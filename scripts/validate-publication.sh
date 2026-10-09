@@ -747,6 +747,10 @@ def validate_plan_package_json() -> None:
             check(execution_path, execution.get("started_at") is None and execution.get("finished_at") is None, "execution")
         else:
             check(execution_path, observed_time(execution.get("started_at")) and execution.get("base_commit_sha") is not None, "execution")
+            if manifest is not None:
+                allowed_manifest_states = ("approved", "superseded") if execution.get("status") == "superseded" else ("approved",)
+                check(execution_path, manifest.get("status") in allowed_manifest_states and observed_time(manifest.get("finalized_at")), "execution")
+            check(execution_path, sha(execution.get("manifest_sha256")) and execution.get("manifest_sha256") != sha_placeholder, "execution")
         if execution.get("finished_at") is not None:
             check(execution_path, observed_time(execution.get("finished_at")), "execution")
         if observed_time(execution.get("started_at")) and observed_time(execution.get("finished_at")):
@@ -755,6 +759,7 @@ def validate_plan_package_json() -> None:
         command_run_ids: set[str] = set()
         successful_run_ids: set[str] = set()
         test_run_ids: list[str] = []
+        passed_test_run_ids: list[str] = []
 
         def latest_tests_passed(items: object) -> bool:
             if not isinstance(items, list) or not items:
@@ -852,6 +857,8 @@ def validate_plan_package_json() -> None:
                         check(execution_path, identifier(record.get("test_id"), "T") and identifier(record.get("run_id"), "RUN"), "execution")
                         if isinstance(record.get("run_id"), str):
                             test_run_ids.append(record["run_id"])
+                            if record.get("status") == "passed":
+                                passed_test_run_ids.append(record["run_id"])
                         check(execution_path, enum(record.get("status"), ("not_run", "passed", "failed", "blocked", "skipped")), "execution")
                         check(execution_path, timestamp(record.get("recorded_at")), "execution")
                         if record.get("status") == "not_run":
@@ -869,6 +876,7 @@ def validate_plan_package_json() -> None:
                         check(execution_path, command_records[-1].get("exit_code") == 0, "execution")
         commands(execution.get("cumulative_verification"))
         check(execution_path, all(run_id in command_run_ids for run_id in test_run_ids), "execution")
+        check(execution_path, all(run_id in successful_run_ids for run_id in passed_test_run_ids), "execution")
         for tests in completed_task_tests:
             check(execution_path, latest_tests_passed(tests), "execution")
         deviations = execution.get("deviations")
