@@ -2,13 +2,13 @@
 
 [English](README.en.md) | 繁體中文
 
-這是一個同時支援 Codex 與 Claude Code 的公開 Skill，用可驗證的流程協助完成需求計畫、測試設計、Git Diff 審查與端到端實作。
+這是一個支援 Codex 與 Claude Code 的公開 Skill，核心交付是可執行的需求計畫、測試設計與交付一致性審查，並可依核准計畫協調端到端實作與驗證。
 
 ## 技術與相容性
 
 - Skill 格式：Agent Skills（`SKILL.md`）
 - 支援工具：Codex、Claude Code
-- 文件格式：Markdown、YAML
+- 文件格式：Markdown、JSON、JSON Schema、YAML
 - 發布驗證：Bash、Python 3 標準函式庫
 - 版本管理與審查：Git
 
@@ -17,52 +17,79 @@
 - **需求計畫**：整理目標、邊界、影響、複用、風險與驗收方式；存在且相關時會讀取領域 `CONTEXT` 與 ADR，缺少時不強制建立。AI 協作成效與本機計時預設關閉，只有使用者明確要求或目標倉庫政策要求時才加入並量化。
 - **測試設計**：設計正常、邊界、異常與回歸情境，並對應自動化與手動驗證。
 - **Git Diff 審查**：分別檢查 Spec／範圍與 Standards／工程品質，驗證並去重後使用目前需求對話內穩定的 `REV-*` 編號、高／中／低嚴重度與狀態追蹤問題。
-- **完整流程**：依序進行需求計畫、測試設計、核准後實作、驗證、文件回填與 Git Diff 審查。
+- **完整流程**：先完成計畫、測試設計與適用的接口契約，整包核准後實作，再驗證、回填執行證據與審查完整 Diff。
 
-## 外部工作流整合
+## 完整流程
 
-- 四種模式仍是完整原生路徑。只有使用者進入其中一種模式或明確要求跨 Skill 開發交付協調時，才在需求計畫、測試設計、實作、驗證與修復、文件同步及 Git Diff 審查階段評估外部能力。
-- 能力有兩個輸入：主動發現只接受平台本輪提供的 Skill catalog metadata；顯式調用上下文只接受使用者已透過平台在目前任務直接調用的能力，不重新發現、排名或調用。發現不等於啟用，兩者都不掃描本機，也不因安裝狀態、品牌或名稱建立能力。
-- 待核驗能力為零／一／多項時，快速路徑會直接回退、跳過虛假比較，或只展開目前最高優先組；metadata 初篩不直接建立候選，任何路徑都不省略授權、副作用、所有權、強制合同與可驗證增益。
-- 候選先通過可用性、調用模式、授權、副作用、產物所有權與強制合同門檻，再依可驗證增益和一致優先序選用。沒有合格候選時靜默使用原生流程。
-- Model-invoked 能力依平台合同觸發；User-invoked 能力只輸出一項目前平台可執行的顯式調用指示並暫停，完成後重新驗證產物再接續。README 不維護第三方靜態命令清單。
-- 每個需求最多一個需求級工作流所有者；階段能力執行者只承接獨立能力，外部正式產物保留唯一可寫所有者。本 Skill 只橋接必要的來源、狀態、缺口與同步結果。
-- 跨 Provider 能力組合只允許互不重疊的能力槽或明確上下游；同槽與能力包只選一個主執行者，每條跨 Provider 邊都需輕量產物交接合同。
-- 計畫已足以直接執行時不預設產生 tickets；只有長期追蹤、複雜協作或外部 tracker 確有增益時才交接任務排序能力。
-- 只有使用者需要行動、額外授權、衝突裁決或跨任務恢復時才顯示或保存緊湊交接；不把內部快照、排名或淘汰過程寫入計畫。
-- 單一外部工作流已完整、安全且獲授權時，本 Skill 退出多餘橋接；外部能力失效時按實際副作用安全降級，不宣稱 Provider 已通過。
-- 整合不會自動安裝、setup、初始化、提交、封存、刪除、遠端寫入或發布。
+下圖適用於完整流程；只要求需求計畫、測試設計或 Git Diff 審查時，只執行指定模式。
+
+```mermaid
+flowchart TD
+    A["確認需求、範圍與驗收條件"] --> B["草擬計畫與測試設計<br/>按需定位接口契約"]
+    B --> C["整包核准與身份核對"]
+    C --> D["依 implementation.md 執行"]
+    D --> E["驗證並記錄 execution.json"]
+    E --> F{"驗收與完整 Diff 審查通過？"}
+    F -->|是| G["交付結果與證據"]
+    F -->|依已核准方案修復| D
+    F -->|計畫需變更：新包重新核准| B
+```
+
+沒有有效核准或必要輸入時先停下。核准後的正式文件保持不可變；結果寫入 `execution.json`，範圍、接口或實作步驟需要變更時建立新包重新核准。具體身份、隔離工作區與恢復規則見[計畫包合同](skills/ai-development-workflow/references/plan-package.md)。
 
 ## 需求計畫特性
 
-- 每個新需求建立 `docs/plans/YYYY-MM-DD-<topic>/` 計畫包：`design.md`、`delivery.md`、`implementation.md`、`test-design.md`、`manifest.json` 與 `execution.json` 各自擁有單一職責；舊平鋪計畫只讀相容，不自動搬移或刪除。
-- 新增或變更接口時，沿用唯一權威契約；沒有既有來源才按需生成包內 `contracts/`，提供請求／響應 Schema、中文字段說明、型別正確的示例及適用的 Apifox Mock，並由同一契約驗收真實實作的結構與業務行為。沒有接口變更不增加空文件，也不啟動 Mock 服務或接口平台。
-- `implementation.md` 是原生與外部執行型工作流的統一入口；Superpowers `executing-plans` 或 `subagent-driven-development` 通過[相容性矩陣](skills/ai-development-workflow/references/plan-package.md#superpowers-相容性矩陣)後可直接逐 Task 執行，不需要格式轉換。
-- 外部核准紀錄綁定四份正式文件的 SHA-256、來源 revision、execution ID 與 execution、worktree、本地 commit 策略；條件式 Task 派生完成後最終化 `manifest.json` 並記錄一次性執行收據。核准文件保持不可變，最新外部狀態決定其效力；`execution.json` 擁有實際命令、測試、Task 狀態和 commit SHA。
-- `docs/plans/` 保持 Git 忽略且不得提交。隔離 worktree 只 materialize manifest allowlist，使用相同相對路徑並在複製前、複製後及執行前重驗；push、PR、merge、release、publish、部署與其他遠端寫入永遠需要獨立授權。
-- `tasks/` 預設不生成；只有並行、跨會話、跨倉庫或高風險隔離時，才從已核准 `implementation.md` 派生並綁定父計畫 SHA、Task ID、驗收、依賴與 allowed files。
-- 先自行查證環境事實，再對會改變範圍、合同或方案的決策逐題確認並附建議答案。
-- 按需讀取現有領域上下文、決策地圖與 ADR，對照目前程式碼驗證；不為補格式建立額外文件。
-- 只在適用時整理使用者或外部系統可觀察的行為與驗收場景，不為湊格式產生冗長 User Stories。
-- 小型、單倉庫且沒有外部產物或高擴散風險的需求使用緊湊檔位；舊需求計畫的六個核心標題只保留歷史讀取語義，新計畫包按各文件職責分配內容，測試設計可用五個核心標題，複雜需求才展開完整欄位目錄。
-- 使用 `AC-* → S-* → T-* → D-*／RUN-*` 串接驗收、切片、情境、資料與執行；預計命令只由測試設計擁有，實際命令與逐情境結果只由 `execution.json` 擁有。
-- 優先選擇使用者可觀察的最高且穩定公開介面作為測試 seam；既有低層測試不能充分驗證可見合同時，可在該公開介面新增測試並取得核准。
-- 實作以可獨立驗證的垂直切片、阻塞關係與完成判準排序；Wide refactor 採 `expand → migrate → contract` 並設整合關卡。
+每個新需求使用 `docs/plans/YYYY-MM-DD-<topic>/`：
+
+```text
+docs/plans/YYYY-MM-DD-<topic>/
+├── design.md
+├── delivery.md
+├── implementation.md
+├── test-design.md
+├── manifest.json
+├── execution.json
+├── contracts/                 # 條件式，按需建立接口文件
+│   ├── api.md
+│   ├── operation.request.schema.json
+│   └── operation.response.schema.json
+└── tasks/                     # 條件式，從核准計畫派生
+    └── S-01.md
+```
+
+| 文件 | 用途 |
+| --- | --- |
+| `design.md` | 背景、選定方案、架構、資料流與接口 |
+| `delivery.md` | 範圍、現況證據、`AC-*` 與驗收條件 |
+| `implementation.md` | 精確檔案、逐步操作、命令、預期結果與依賴；執行者從這裡開始 |
+| `test-design.md` | 測試矩陣、資料、斷言與預計 `RUN-*` 驗證方式 |
+| `manifest.json` | 核准身份、正式文件 SHA-256 與執行策略 |
+| `execution.json` | 實際狀態、命令、自動化／人工驗收證據、偏差與結果 |
+
+- `contracts/`：只有接口新增或變更、且沒有既有權威來源時才建立；已有來源保存精確引用與版本。Schema提供中文字段說明、型別正確的示例及適用的Apifox Mock，同一契約用於實作驗收。詳見[接口契約與驗收](skills/ai-development-workflow/references/api-contract.md)。
+- `tasks/`：預設不生成；並行、跨會話、跨倉庫或高風險隔離有需要時，才從已核准計畫派生。
+- `docs/plans/` 是Git忽略的過程產物，不得提交。舊平鋪計畫只讀相容，不自動搬移或刪除；實作前補成新包並重新核准。
+- 小型需求保持緊湊。舊平鋪格式的六個核心標題只保留歷史讀取語義；新包按文件職責拆分，符合條件的小型測試設計可用五個核心標題。
+- 以 `AC-* → S-* → T-* → D-*／RUN-*` 串接驗收、Task、案例、資料與驗證。詳細方法見[需求計畫](skills/ai-development-workflow/references/requirement-plan.md)與[測試設計](skills/ai-development-workflow/references/test-design.md)。
+
+## 外部工作流整合
+
+- 主動發現僅接受平台本輪提供的 Skill catalog metadata；顯式調用上下文沿用目前任務已實際調用的能力。發現不等於啟用，不掃描本機安裝。
+- 待核驗能力為零／一／多項時按需展開；metadata 初篩不直接建立候選，先核驗可用性、授權、副作用、所有權與可驗證增益。沒有合格能力時使用原生流程。
+- Model-invoked能力依平台合同調用；User-invoked能力提供一項目前平台可執行的顯式調用指示並暫停，返回後重新驗證。只有使用者需要行動、授權、裁決或跨任務恢復時才顯示必要交接。
+- 跨 Provider 能力組合須有不重疊的能力槽或明確上下游，並具備產物交接合同；正式產物只有一個可寫所有者。計畫足以直接執行時不預設產生 tickets；單一工作流已完整覆蓋需求時退出多餘橋接。
+- 整合不會自動安裝、setup、初始化、提交、封存、刪除、遠端寫入或發布。本地commit依核准策略；push、PR、merge、release、部署及其他遠端寫入仍需獨立授權。
+
+Superpowers可讀取 `implementation.md`，通過[相容性矩陣](skills/ai-development-workflow/references/plan-package.md#superpowers-相容性矩陣)後按核准模式執行。完整規則見[Skill編排合同](skills/ai-development-workflow/references/skill-orchestration.md)與[Provider整合](skills/ai-development-workflow/references/workflow-integration.md)。
 
 ## 參考計時與提效
 
 - AI 協作成效與參考計時預設關閉；只有使用者明確要求 AI 成效／提效，或目標倉庫政策要求時才啟用。
-- 啟用後以 Python 3 標準函式庫的短命令記錄 session 閉合區間；不啟動常駐程序，也不為估算額外重讀整個倉庫。
-- 成效只量化時間；不收集、不估算、不輸出 Token 用量。
-- 狀態只保存在使用者本機的專用狀態目錄，不寫入目標倉庫、不上傳，也不記錄需求內容、程式碼、檔名或倉庫名。
-- 計時只在目前對話以已持有的隨機 ID 繼續；續接回合以單一 `resume --new-turn` 恢復。等待使用者、CI 或外部佇列前先暫停，不把等待時間算入工作耗時。
-- 人工參考基準由已核准計畫的五階段 PERT 在實作前鎖定。計時可涵蓋完整需求，或在實作前才啟用時從下一個未開始階段量化剩餘交付範圍；範圍外階段使用 `0/0/0`，局部結果不得稱為整案提效。
-- 只有宣告範圍內完整覆蓋、基準有效且指紋一致時，腳本才輸出節省工時與比例。報告將公式結果表述為「參考工時節省比例」；部分或未知覆蓋只回報實測耗時與異常。
-- 同一對話完成後新增 V2／V3 範圍時，使用新的獨立計量分段，不恢復舊狀態或手工合併不同分段。
-- 新對話不自動搜尋、繼續或合併舊計量，同一需求換對話後不計算整體參考提效。
-- 如使用者已安裝並主動選擇 ActivityWatch，可以本機 AFK 活躍區間與 session 求交集；只使用 loopback GET，不讀取 window bucket，失敗時降級為 session。
-- Python 3 不可用、使用者停用或本機安全檢查失敗時，不自動安裝依賴，直接繼續原工作流程並標示無法計算參考提效。
-- 此功能不建立跨需求索引、雲端分析或背景清理服務。
+- 可選Python 3標準函式庫工具只在本機記錄閉合時間區間；等待使用者或CI時暫停，不啟動背景服務、不上傳資料。Python不可用時停用計時，核心流程繼續。
+- 實作前鎖定對應範圍的PERT基準；只有覆蓋完整且可比時才輸出參考工時節省比例。局部範圍、部分或未知覆蓋如實標示，不能推為整案提效。
+- 成效只量化時間；不收集、不估算、不輸出Token用量。新增範圍分段記錄，新對話不續接舊計量。
+
+命令、ActivityWatch選用與回填方式見[參考計時指南](skills/ai-development-workflow/references/reference-timing.md)。
 
 ## 安裝
 
@@ -132,7 +159,7 @@ cp -R skills/ai-development-workflow ~/.claude/skills/ai-development-workflow
 ## 使用範例
 
 - 「請先整理這個功能的需求計畫，暫時不實作。」
-- 「依核准的計畫建立測試設計，包含資料策略與回歸範圍。」
+- 「依目前設計與交付條件建立測試設計，包含資料策略與回歸範圍，完成後一併送整包核准。」
 - 「請以目標分支為基準審查完整 Git Diff。」
 - 「請用完整流程處理目前需求；如果平台本輪提供能帶來可驗證增益的協同 Skill，請在需要我操作或授權時給我一項明確交接。」
 - 「需求已完成，請回填可驗證的 AI 協作貢獻，並依已鎖定 PERT 與本機計量摘要計算參考提效。」
@@ -140,13 +167,13 @@ cp -R skills/ai-development-workflow ~/.claude/skills/ai-development-workflow
 
 ## 更新
 
-使用 skills CLI 安裝時，可執行：
+使用skills CLI安裝時，在專案根目錄執行以下命令，只更新專案級安裝：
 
 ```bash
-npx skills update ai-development-workflow
+npx skills update ai-development-workflow -p
 ```
 
-以上命令用於專案級安裝；更新全域安裝時加上 `-g`：
+更新全域安裝時改用 `-g`：
 
 ```bash
 npx skills update ai-development-workflow -g
@@ -160,11 +187,14 @@ npx skills update ai-development-workflow -g
 python3 -m unittest discover -s tests -p "test_*.py" -v
 bash tests/test-validate-publication.sh
 bash scripts/validate-publication.sh
+git diff --check
 ```
 
 validator 在倉庫模式掃描公開工作目錄（排除 `.git`、`.idea` 及明確定義為 Git 忽略過程產物的 `docs/plans/`、`docs/specs/`），檢查 Skill 結構、元資料、參考計時腳本、Markdown 相對連結、計畫包 Markdown／JSON 範本、可選 AI 成效範本的完整欄位、繁體中文及疑似敏感資訊。其他相似目錄不會被排除；錯誤只列出相對路徑、規則與必要行號，不回顯命中內容。
 
 Skill 執行時的互動語言跟隨使用者，文件與程式碼跟隨目標倉庫規範；本倉庫 publication validator 的繁體中文檢查只保護本倉庫公開文件，不會把繁體中文強制套用到其他目標倉庫。
+
+這些檢查驗證公開文件、範本與validator行為；真實接口、Provider調用、外部核准及工作區隔離仍須在對應任務中取得證據。Schema示例或Mock通過，不代表真實實作已通過驗收。
 
 ## 語言 allowlist
 
