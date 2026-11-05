@@ -24,6 +24,7 @@
 - Approved source revision: `{{INPUT:完整 Git source_revision SHA}}`. Execution ID: `{{INPUT:single-execution-id}}`. These values must match manifest.json and the external approval record.
 - Allowed external actions: push, PR, merge, release, publish, deployment, API mutations, and other remote writes require separate authorization.
 - Record observed commands, tests, task status, and commit SHA only in `execution.json`.
+- For planned manual checks, use `kind=manual` observations with actual steps/time/result/evidence and `exit_code=null`; do not fabricate a shell exit code. Automated passed tests must reference successful command observations in the same Task. See the execution record contract in the plan-package reference; changing the verification method still requires the original approval rules.
 - Assign a unique observed run_id to every command attempt, including RED/GREEN retries and cumulative verification. Keep planned_run_id as the source RUN ID (null for non-test operations), and bind each test result to an existing observed command run_id.
 - Before execution, verify the external approval record and final receipt, manifest SHA, every allowlisted file SHA, finalized_at, and execution/worktree/commit policies. Complete materialization before starting a worktree-bound executor.
 - Approved Markdown and manifest are immutable: do not check off boxes or rewrite status, steps, or hashes. Provider ledger/todos are recovery indexes tied to the full plan path, package ID, and manifest SHA; reconcile their evidence to execution.json.
@@ -60,6 +61,8 @@
 **Interfaces:**
 - Consumes: `{{INPUT:完整 signature、schema 或前置 Task 產物；無則寫 None}}`
 - Produces: `{{INPUT:完整 function/class/route/schema、參數與回傳型別}}`
+
+**API contract (when applicable):** {{INPUT:operation、唯一 Schema 相對定位、必要中文語義與精確限制、對應 T-*／RUN-*；無接口變更則刪除。子代理 brief 必須攜帶同一契約與依賴，不能僅交付 Task 標題。}}
 
 **Dependencies:** `{{INPUT:None 或 Task ID 加上實際依賴原因}}`
 

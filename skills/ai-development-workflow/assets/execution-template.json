@@ -15,6 +15,7 @@
       "changed_files": [],
       "commands": [
         {
+          "kind": "command",
           "run_id": "RUN-01",
           "planned_run_id": "RUN-01",
           "workdir": "{{INPUT:repository-relative-path}}",

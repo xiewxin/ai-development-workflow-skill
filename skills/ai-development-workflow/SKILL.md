@@ -11,6 +11,7 @@ description: Use when 使用者要求需求計畫、測試設計、Git Diff 審�
 
 - 先確認目標、範圍、驗收條件與限制，再產出文件或程式碼。
 - 只做目前已授權的工作；單一模式只做該模式，多模式只做明確指定的組合。
+- 核心交付聚焦可執行計畫、測試設計與交付一致性審查；接口契約按需支援這三項，外部執行能力與參考計時不擴張主責。
 - 不以時限、上線壓力或主管要求為由，擅自縮減需求或驗收條件。指令與驗收條件衝突時，先列出影響並請使用者確認。
 - 結論需區分已驗證事實、合理推論與待確認事項；不用歷史計畫取代當前實作證據。
 
@@ -101,6 +102,7 @@ Model-invoked 候選依平台合同觸發；User-invoked 候選只輸出一項�
 - 需求計畫：[`references/requirement-plan.md`](references/requirement-plan.md)
 - 新計畫包、Superpowers 執行入口、manifest／execution、worktree materialization 與舊格式相容：[`references/plan-package.md`](references/plan-package.md)
 - 測試設計：[`references/test-design.md`](references/test-design.md)
+- 本次新增或變更接口，需設計請求／響應 Schema、Mock 或實作後契約驗收：[`references/api-contract.md`](references/api-contract.md)；沒有接口變更時不建立空文件。
 - Git Diff 審查或審查並修復：[`references/git-diff-review.md`](references/git-diff-review.md)
 - 已明確啟用 AI 協作成效，需建立計量、鎖定基準或完結回填：[`references/reference-timing.md`](references/reference-timing.md)
 - 出現可能相關的 catalog metadata、強制合同、活動外部產物、目前任務已成立的顯式調用上下文，或使用者明確要求跨 Skill 協調時：先讀[`references/skill-orchestration.md`](references/skill-orchestration.md)建立候選或接入實際調用狀態；只有已知 Provider 候選或顯式調用能力需要產物及安全限制時，再讀[`references/workflow-integration.md`](references/workflow-integration.md)

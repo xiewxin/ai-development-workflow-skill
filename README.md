@@ -36,6 +36,7 @@
 ## 需求計畫特性
 
 - 每個新需求建立 `docs/plans/YYYY-MM-DD-<topic>/` 計畫包：`design.md`、`delivery.md`、`implementation.md`、`test-design.md`、`manifest.json` 與 `execution.json` 各自擁有單一職責；舊平鋪計畫只讀相容，不自動搬移或刪除。
+- 新增或變更接口時，沿用唯一權威契約；沒有既有來源才按需生成包內 `contracts/`，提供請求／響應 Schema、中文字段說明、型別正確的示例及適用的 Apifox Mock，並由同一契約驗收真實實作的結構與業務行為。沒有接口變更不增加空文件，也不啟動 Mock 服務或接口平台。
 - `implementation.md` 是原生與外部執行型工作流的統一入口；Superpowers `executing-plans` 或 `subagent-driven-development` 通過[相容性矩陣](skills/ai-development-workflow/references/plan-package.md#superpowers-相容性矩陣)後可直接逐 Task 執行，不需要格式轉換。
 - 外部核准紀錄綁定四份正式文件的 SHA-256、來源 revision、execution ID 與 execution、worktree、本地 commit 策略；條件式 Task 派生完成後最終化 `manifest.json` 並記錄一次性執行收據。核准文件保持不可變，最新外部狀態決定其效力；`execution.json` 擁有實際命令、測試、Task 狀態和 commit SHA。
 - `docs/plans/` 保持 Git 忽略且不得提交。隔離 worktree 只 materialize manifest allowlist，使用相同相對路徑並在複製前、複製後及執行前重驗；push、PR、merge、release、publish、部署與其他遠端寫入永遠需要獨立授權。

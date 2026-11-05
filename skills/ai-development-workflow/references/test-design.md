@@ -127,6 +127,8 @@ docs/plans/YYYY-MM-DD-<topic>/test-design.md
 
 ## 自動化映射
 
+涉及接口變更時先讀[接口契約與驗收](api-contract.md)。將 operation／Schema 引用映射到 `AC-*／T-*／RUN-*`，分別驗證實際接口結構與業務行為；Mock／Schema 示例通過不能代替真實實作。沒有接口變更時不加契約章節。
+
 依目標倉庫實際的 test runner、測試目錄與鄰近測試設計，不強迫使用特定框架或 `tests/Unit`。
 
 為框架管理、容器建立或執行期改寫的類別設計測試 seam 時，先記錄下列最小預檢：
@@ -153,6 +155,8 @@ docs/plans/YYYY-MM-DD-<topic>/test-design.md
 資料建立與清理只在「測試資料策略」以 `D-*` 定義，並列出覆蓋的 `T-*`。相同資料、檔案、命令或 mock 邊界可合併記錄一次，再由穩定 ID 對應；不要為每個案例複製共同設定。
 
 不要求所有情境都自動化。無法自動化時，說明技術、成本、環境或觀測性限制，並指定手動、環境或上線觀察的替代驗證。
+
+人工驗收在 execution.json 以[自動化與人工觀測](plan-package.md#自動化與人工觀測)的 `kind=manual` 記錄步驟、時間、結果及證據，exit_code 保持 null；不要捏造命令成功。自動化測試的 passed 必須引用同一 Task 的成功 command 觀測，保留正確 RED→GREEN 歷史。
 
 ## 測試資料
 

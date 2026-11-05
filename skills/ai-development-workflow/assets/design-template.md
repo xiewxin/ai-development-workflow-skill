@@ -18,6 +18,8 @@
 | --- | --- | --- | --- |
 | {{INPUT:元件}} | {{INPUT:單一責任}} | `{{INPUT:完整 signature、schema、route 或事件合同}}` | {{INPUT:已驗證依賴}} |
 
+接口契約（條件式）：{{INPUT:有接口變更時引用唯一權威來源、operation、版本及 Schema 路徑；沒有來源才使用包內 contracts/；無接口變更只寫一行依據。依 references/api-contract.md 確認結構、中文說明、示例與適用 Mock，不複製整套字段表。}}
+
 ## 替代方案
 
 | 方案 | 主要取捨 | 決策 |

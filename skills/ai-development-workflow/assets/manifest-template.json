@@ -28,6 +28,7 @@
   "execution_mode": "{{INPUT:inline|executing-plans|subagent-driven-development|provider}}",
   "worktree_policy": "{{INPUT:current-checkout|isolated-worktree}}",
   "commit_policy": "{{INPUT:none|task-local-commits|final-local-commit}}",
+  "contract_files": {},
   "derived_tasks": [],
   "authorization": {
     "external_actions": {

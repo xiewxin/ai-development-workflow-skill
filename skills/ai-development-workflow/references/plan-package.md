@@ -14,6 +14,7 @@ docs/plans/YYYY-MM-DD-<topic>/
 ├── test-design.md
 ├── manifest.json
 ├── execution.json
+├── contracts/             # 條件式；沒有既有權威契約且有接口變更時生成
 └── tasks/                 # 條件式；預設不生成
 ```
 
@@ -81,7 +82,7 @@ docs/plans/YYYY-MM-DD-<topic>/
 批准計畫可 materialize 到隔離 worktree，但不是一般目錄的無條件複製：
 
 1. 先建立或確認同一倉庫的目標隔離 worktree，再做 materialization，最後才啟動執行型 Skill；Git 忽略的包不會隨 worktree checkout 出現。複製前核對外部核准紀錄及收據，在來源倉庫重新計算四份正式文件 SHA-256，並逐項驗證派生 Task 的內容 SHA、父 implementation SHA 與 schema。
-2. 僅允許複製 manifest 列出的四份正式文件與 `manifest.json`；`execution.json` 在目標 worktree 依範本建立新的未開始狀態。條件式 Task 只有列入 manifest 的 `derived_tasks` 才可複製。
+2. 僅允許複製 manifest 列出的四份正式文件、`manifest.json` 及 `contract_files` 中的接口契約；`execution.json` 在目標 worktree 依範本建立新的未開始狀態。條件式 Task 只有列入 manifest 的 `derived_tasks` 才可複製。
 3. 目標必須是同一倉庫的隔離 worktree，且使用相同相對路徑 `docs/plans/YYYY-MM-DD-<topic>/`。用 Git common directory 身份確認同倉庫；首次實作前目標 HEAD 必須等於 source_revision，且新隔離 worktree 的 tracked／untracked 工作內容須為乾淨基線（忽略的計畫包除外）。不得把錯誤或過時分支的 HEAD 記成 execution base 來放行。驗證來源與目標所有路徑元件，拒絕符號連結、非一般檔案、路徑穿越與逃離包根目錄的解析結果。目標已存在時停止，不覆蓋或合併；既有包恢復執行走身份重驗而非重新 materialize。
 4. 複製後再次重新計算 SHA-256，逐項驗證四份文件、每個派生 Task 與 manifest，並把已核對外部收據的目標 manifest SHA 寫入新的 `execution.json`。
 5. 執行前第三次驗證核准狀態、全部 allowlist 檔案 SHA、執行模式、worktree 與 commit 策略。複製驗證到執行之間若檔案再變動，停止交接並重驗，不沿用舊結果。
@@ -108,15 +109,57 @@ docs/plans/YYYY-MM-DD-<topic>/
 
 發生偏差時先記錄原步驟、新事實、影響與是否需要重新核准。超出 allowed files、改變 AC、接口、方案、實作步驟或授權策略時停止並重新核准；純執行事實可記錄後繼續。命令失敗或需改命令時記錄失敗證據，再依核准計畫既有替代步驟處理；沒有已核准替代步驟時停止，不能只以「不改合同」自行放行。最終累計驗證、完整 Diff review 與剩餘風險也只寫入 `execution.json`，不回寫成核准計畫事實。
 
-每個 commands 項目固定包含 `run_id`、`planned_run_id`、`workdir`、`actual`、`recorded_at`、`exit_code`、`result`；每個 tests 項目包含 `test_id`、`run_id`、`actual`、`recorded_at`、`evidence`、`status`。`run_id` 是單次命令觀測的唯一 ID，在全部 Task commands 與 cumulative_verification 中不得重複；RED、GREEN、重試或再次累計驗證分配不同 run_id，`planned_run_id` 指回測試設計的原始 RUN ID（非測試操作為 null）。test.run_id 必須引用同一 execution 內存在的 command run_id，不能懸空或用 planned_run_id 代替觀測。尚未執行的觀測值為 `null`，不得保留生成占位符。`cumulative_verification` 使用相同 commands 結構；`final_commit_sha` 記錄 final-local-commit 的 SHA，逐 Task SHA 留在該 Task。commit 成功後才讀取 Git SHA 並回填。`deviations` 每項記錄 `task_id`、`original_step`、`new_fact`、`impact`、`requires_reapproval` 與 `resolution`。JSON 只接受固定 schema 欄位；唯一可選欄位 `ai_collaboration` 為字串陣列，保存已明確啟用的計量摘要與證據索引。狀態值與型別依 JSON 範本及發布檢查的 schema 約束。
+每個 commands 項目固定包含 `run_id`、`planned_run_id`、`workdir`、`actual`、`recorded_at`、`exit_code`、`result`；每個 tests 項目包含 `test_id`、`run_id`、`actual`、`recorded_at`、`evidence`、`status`。`run_id` 是單次觀測的唯一 ID，在全部 Task commands 與 cumulative_verification 中不得重複；RED、GREEN、重試或再次累計驗證分配不同 run_id，`planned_run_id` 指回測試設計的原始 RUN ID（非測試操作為 null）。test.run_id 必須引用同一 Task 內存在的觀測 run_id，不能懸空或用 planned_run_id 代替觀測。尚未執行的觀測值為 `null`，不得保留生成占位符。`cumulative_verification` 使用相同 commands 結構；`final_commit_sha` 記錄 final-local-commit 的 SHA，逐 Task SHA 留在該 Task。commit 成功後才讀取 Git SHA 並回填。`deviations` 每項記錄 `task_id`、`original_step`、`new_fact`、`impact`、`requires_reapproval` 與 `resolution`。JSON 只接受固定 schema 欄位；唯一可選頂層欄位 `ai_collaboration` 為字串陣列，保存已明確啟用的計量摘要與證據索引。觀測的可選欄位見下節；狀態值與型別依 JSON 範本及發布檢查的 schema 約束。
+
+### 自動化與人工觀測
+
+`commands` 保留既有欄位與名稱，承載實際命令或人工驗證觀測。可選 `kind` 為 `command`（省略時同義，既有 v1 紀錄不用轉換）或 `manual`，不新增頂層集合。自動化觀測保持真實命令和整數 exit_code；不得為已執行命令填 null。
+
+只有原測試設計已指定人工方式時，使用 `kind=manual`。其 `actual` 記錄實際操作／判定步驟，`workdir` 記錄對應驗證上下文的相對位置，`recorded_at` 是實際記錄時間，`exit_code` 固定 null，不捏造進程退出碼。`result` 只接受 `not_run|passed|failed|blocked`；已觀測時必須另有非空 `evidence` 定位截圖、檢查表或其他可核對記錄。未執行時 actual、recorded_at、exit_code、evidence 均為 null。tests 仍以 run_id 引用該觀測並保存自己的結果與證據；不能引用其他 Task 的觀測，也不能用無關成功命令替代驗收。
+
+```json
+{
+  "kind": "manual",
+  "run_id": "RUN-02",
+  "planned_run_id": "RUN-01",
+  "workdir": ".",
+  "actual": "在測試瀏覽器核對字段名稱與空值呈現",
+  "recorded_at": "2026-01-01T00:03:00Z",
+  "exit_code": null,
+  "result": "passed",
+  "evidence": "evidence/field-checklist.md"
+}
+```
+
+passed 測試必須關聯同一 Task 中成功的觀測：command 為 exit_code=0 且已執行，manual 為 result=passed、exit_code=null 且有證據。合法 RED 與失敗歷史仍保留；GREEN 應引用真正成功的新觀測，不能只改測試標籤。Task 最後觀測及 cumulative_verification 各驗證項最後觀測使用同一成功規則，所以純人工／混合驗收也可如實完成。`ai_collaboration` 是唯一可選頂層欄位；kind/evidence 是上述觀測的條件式欄位，不放到 tests 或頂層。這些規則不證明觀測真實，也不授權將既定自動化驗收改成人工以掩蓋失敗；方式變更仍遵守原計畫核准邊界。
 
 交接時明示當前 execution.json 的唯一寫入者與回收寫入責任的時點，不讓協調者與實作代理同時改寫同一檔案。委派回填時，brief 必須提供適用的完整欄位合同及可定位的 execution 範本，涵蓋 commands、tests 與 deviations 的欄位名、型別、ID／相對路徑格式及跨欄位關聯；只有空陣列或「回填結果」指示不足以構成輸出合同。驗證須對照既有 schema，不以只核對欄位名的自訂檢查冒充完整驗證。未委派寫入時，實作代理交回原始觀測及證據位置，由協調者依 schema 回填。`recorded_at` 表示實際記錄時刻；未即時採集的執行時間不得推算補造，須保留原始紀錄並明示缺口。修正 JSON 結構不代表補回缺失的歷史證據。
 
 `completed` 必須同時具備開始／完成時間、已核對基線、所有 Task 的完成狀態、已執行命令、通過測試與證據、Task Diff review、成功的累計驗證及最終 Diff review；空陣列、null 時間或 not_run 不得支援完成宣稱。commit_policy 為 final-local-commit 時，完成狀態還必須有非 null 且格式正確的 final_commit_sha；none／task-local-commits 不得填 final_commit_sha。task-local-commits 下，每個 completed Task 必須有非 null 且格式正確的 commit_sha。RED 的預期失敗可保留為歷史命令，但完成 Task 的最後驗證須成功。publication schema 可檢查這些欄位關聯，無法證明填寫的觀測值真實。
 
-commands、tests 與 cumulative_verification 依實際觀測順序追加，保留 RED、失敗與獲准重試，不排序或刪除歷史來通過完成門禁。Task 完成時，每個 test_id 的最後觀測須 passed；累積驗證按 `(planned_run_id, workdir)` 分組，無 planned_run_id 時按 `(actual, workdir)` 分組，每組最後觀測須 exit 0。不同驗證項或不同目錄的成功不能抵銷未解決的失敗；RUN ID 只標識觀測，不代表排序。此判定不授權重試或改命令，仍須遵守既有偏差／重新核准規則。
+execution 為 `not_started` 時可保留範本占位符，包含尚未最終化的草稿。其餘狀態已聲稱開始執行，manifest 必須有實際 approved_at／finalized_at、核准紀錄定位、明確的三項執行策略及全部正式文件／已列契約的非占位 SHA-256；execution 必須有實際包 ID、execution ID 與非占位 manifest_sha256，來源 revision 仍須符合已核對基線。manifest 狀態可為 approved；superseded 僅保留歷史紀錄的可讀性，不授權啟動或恢復已取代的執行。這是欄位一致性檢查，不計算實際 digest，也不代替外部收據核對。
+
+`not_started` 不得與已觀測結果並存：execution 的所有 Task 也須未開始，base_commit_sha／final_commit_sha 為 null，final_diff_review 為 not_run，累積驗證只可為空或尚未執行的觀測。每個未開始 Task 的 changed_files 為空、commit_sha 為 null、diff_review 為 not_run，commands／tests 只可為空或 not_run；此規則也適用於 execution 已開始但尚未啟動的 Task。其餘觀測欄位仍遵守既有 null 規則，不能只改狀態標籤保留實際結果。workdir 只有在該觀測 not_run 時可保留範本占位符；已執行的自動化、人工及累積驗證均須填實際相對位置，倉庫根目錄使用 `.`。
+
+execution 的 worktree 在未開始時可為 null、範本占位符或預定相對身份；開始後不論 current-checkout 或 isolated-worktree，均須填入實際相對身份，根目錄可用 `.`。此欄位檢查不證明真實隔離或恢復身份相符，仍須核對外部領用收據與實際工作區。
+
+已填實的時間須符合 `approved_at ≤ finalized_at ≤ started_at ≤ finished_at`；逐對比較實際帶時區的時間點，允許相等，不按字串排序。未開始或尚未最終化的範本仍依上述狀態規則允許 null／占位符，不為比較補造時間。recorded_at 是實際記錄時刻，可晚於 finished_at；此時間鏈不限制如實補記的證據，也不證明外部核准真實。
+
+commands、tests 與 cumulative_verification 依實際觀測順序追加，保留 RED、失敗與獲准重試，不排序或刪除歷史來通過完成門禁。Task 完成時，每個 test_id 的最後觀測須 passed；累積驗證按 `(kind, planned_run_id, workdir)` 分組，無 planned_run_id 時按 `(kind, actual, workdir)` 分組，省略 kind 時視為 command。每組最後觀測須符合上述成功規則。人工與自動化、不同驗證項或不同目錄的成功不能抵銷未解決的失敗；RUN ID 只標識觀測，不代表排序。此判定不授權重試或改命令，仍須遵守既有偏差／重新核准規則。
 
 發布檢查只驗證公開範本的結構與欄位語義，不讀取 Git 忽略的真實需求包，也不證明外部核准、實際檔案雜湊或 worktree materialization 成功。執行者仍須完成上述實體驗證；本 Skill 不增加必要執行環境。
+
+## 條件式接口契約
+
+只有新增或變更接口時，依[接口契約與驗收](api-contract.md)處理。已有權威來源時只在 design 記錄精確引用、版本與變更；沒有來源才新增 `contracts/api.md` 與適用的請求／響應 Schema。沒有接口變更不生成空目錄。字段與結構由唯一 Schema 擁有；design、Task 和測試只引用並攜帶必要語義，不維護多份接口定義。
+
+manifest v1 增加可選 `contract_files`，形式為包內路徑到 `{algorithm: "sha256", sha256: "實際64位小寫十六進位"}` 的物件；無文件時為 `{}`，既有不含此欄位的 v1 視為空。路徑限 `contracts/` 內 `.md`／`.json` 一般檔案，禁止穿越或符號連結。所有包內契約及本地 `$ref` 依賴必須列全，不能只登記 api.md 而漏 Schema。引用既有包外契約時使用其可驗證的版本及定位，不以額外副本冒充來源。
+
+本節將上述四份 Markdown 身份流程擴展至已列出的包內契約：草擬、核准、最終化、worktree materialization、恢復與執行前驗證均包含 contract_files 的完整路徑集合與原始位元組 SHA。一次核准四份正式文件與所有已列契約及執行策略；文件集或契約內容變更須新包重新核准。不得先核准四份 Markdown 再追加未核准的接口文件。契約清單與其 digest 同時綁入包外核准紀錄及最終 manifest 收據。
+
+materialization 的 allowlist 在四份 Markdown、manifest 及已核准 tasks 之外，增加已登記的 contract_files；其他文件仍不複製。來源與目標逐檔核驗；本地引用必須可解析，包外來源在目標中也必須版本一致且可讀。不能只複製四份 Markdown，讓執行者失去 Schema。缺漏、不同版本或 digest 不符時停止交接，不繞過驗證或修改 manifest 合理化差異。
+
+Task brief 傳遞同一 operation、Schema 定位與影響該 Task 的精確值／副作用限制；保持既有 Global Constraints 的必要值摘錄與核准前對帳。接口驗收以真實實作證據為準，Mock／示例驗證只關閉對應的文檔檢查。實際結果寫入 execution.json；不改寫核准契約迎合錯誤實作。發布檢查僅驗證 contract_files 欄位形狀，不讀取真實包、不計算其檔案 SHA，也不證明 Schema 或外部 Mock 平台已驗證。
 
 ## 舊格式受限相容
 

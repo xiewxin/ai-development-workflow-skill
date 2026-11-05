@@ -1024,9 +1024,16 @@ execution = json.loads(execution_path.read_text())
 revision = "a" * 40
 now = "2026-01-01T00:00:00+00:00"
 manifest["source_revision"] = revision
-manifest.update(status="approved", approved_at=now, finalized_at=now)
-execution.update(base_commit_sha=revision, status="completed", started_at=now,
-                 finished_at=now, final_diff_review="passed", manifest_sha256="b" * 64)
+manifest.update(plan_package_id="shell-plan", execution_id="shell-execution",
+                status="approved", approved_at=now, finalized_at=now,
+                approval_record="shell-test", execution_mode="inline",
+                worktree_policy="isolated-worktree", commit_policy="none")
+for metadata in manifest["files"].values():
+    metadata["sha256"] = "c" * 64
+execution.update(plan_package_id="shell-plan", execution_id="shell-execution",
+                 base_commit_sha=revision, status="completed", started_at=now,
+                 finished_at=now, final_diff_review="passed", manifest_sha256="b" * 64,
+                 worktree="worktrees/example")
 if scenario == "draft-manifest":
     manifest.update(status="draft", approved_at=None, finalized_at=None)
 elif scenario == "unfinalized-manifest":
@@ -1095,7 +1102,7 @@ expect_fail "通過測試不得引用失敗命令" "${failed_test_run_root}" "ex
 
 cumulative_test_run_root="$(new_case cumulative-test-run)"
 prepare_completed_execution "${cumulative_test_run_root}" "cumulative-test-run"
-expect_pass "Task 測試可引用同一 execution 的累計驗證命令" "${cumulative_test_run_root}"
+expect_fail "Task 測試不得借用累計驗證命令" "${cumulative_test_run_root}" "execution 欄位"
 
 failed_cumulative_test_run_root="$(new_case failed-cumulative-test-run)"
 prepare_completed_execution "${failed_cumulative_test_run_root}" "failed-cumulative-test-run"
@@ -1113,13 +1120,13 @@ valid_failed_history_root="$(new_case valid-failed-history)"
 prepare_completed_execution "${valid_failed_history_root}" "valid-failed-history"
 expect_pass "合法 RED 失敗歷史與後續 GREEN 通過可保留" "${valid_failed_history_root}"
 
-for scenario in draft-manifest unfinalized-manifest placeholder-manifest-digest completed-superseded-manifest; do
+for scenario in draft-manifest unfinalized-manifest placeholder-manifest-digest; do
     invalid_lifecycle_root="$(new_case "${scenario}")"
     prepare_completed_execution "${invalid_lifecycle_root}" "${scenario}"
     expect_fail "已執行紀錄拒絕 ${scenario}" "${invalid_lifecycle_root}" "execution 欄位"
 done
 
-for scenario in superseded-execution superseded-pair; do
+for scenario in superseded-execution superseded-pair completed-superseded-manifest; do
     superseded_execution_root="$(new_case "${scenario}")"
     prepare_completed_execution "${superseded_execution_root}" "${scenario}"
     expect_pass "保留有效的 ${scenario} 歷史" "${superseded_execution_root}"

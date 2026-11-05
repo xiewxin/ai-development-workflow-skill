@@ -38,7 +38,6 @@ from datetime import datetime
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
-
 # Publication diagnostics use UTF-8 even when a Windows pipe defaults to cp1252.
 sys.stdout.reconfigure(encoding="utf-8")
 sys.stderr.reconfigure(encoding="utf-8")
@@ -591,6 +590,9 @@ def validate_plan_package_json() -> None:
         except ValueError:
             return False
 
+    def observed_time(value: object) -> bool:
+        return value not in (None, time_placeholder) and timestamp(value)
+
     def enum(value: object, choices: tuple[str, ...], template: bool = False) -> bool:
         return value in choices or (template and value == "{{INPUT:" + "|".join(choices) + "}}")
 
@@ -611,6 +613,11 @@ def validate_plan_package_json() -> None:
     def check(path: Path, condition: bool, kind: str) -> None:
         if not condition:
             add_error(path, kind + " 欄位")
+
+    def check_time_order(path: Path, earlier: object, later: object, kind: str) -> None:
+        if observed_time(earlier) and observed_time(later):
+            check(path, datetime.fromisoformat(earlier.replace("Z", "+00:00"))
+                  <= datetime.fromisoformat(later.replace("Z", "+00:00")), kind)
 
     manifest_path = skill_root / "assets" / "manifest-template.json"
     manifest = load_json_template(manifest_path)
@@ -635,6 +642,7 @@ def validate_plan_package_json() -> None:
                 "authorization",
             },
             "manifest 欄位",
+            optional={"contract_files"},
         )
         check(manifest_path, type(manifest.get("schema_version")) is int and manifest["schema_version"] == 1, "manifest")
         check(manifest_path, text_value(manifest.get("plan_package_id"), "{{INPUT:plan-package-id}}"), "manifest")
@@ -646,6 +654,7 @@ def validate_plan_package_json() -> None:
         check(manifest_path, enum(manifest.get("commit_policy"), ("none", "task-local-commits", "final-local-commit"), True), "manifest")
         for field in ("approved_at", "finalized_at"):
             check(manifest_path, timestamp(manifest.get(field)), "manifest")
+        check_time_order(manifest_path, manifest.get("approved_at"), manifest.get("finalized_at"), "manifest")
         check(manifest_path, text_value(manifest.get("approval_record"), "{{INPUT:user-visible-conversation-or-tracker-identifier}}"), "manifest")
         if manifest.get("status") == "approved":
             check(manifest_path, manifest.get("approved_at") not in (None, time_placeholder), "manifest")
@@ -676,6 +685,16 @@ def validate_plan_package_json() -> None:
                     add_error(manifest_path, "manifest 欄位")
                 if item is not None:
                     check(manifest_path, sha(item.get("sha256")), "manifest")
+        contracts = manifest.get("contract_files", {})
+        check(manifest_path, isinstance(contracts, dict), "manifest")
+        if isinstance(contracts, dict):
+            for path, metadata in contracts.items():
+                check(manifest_path, relative_path(path) and path.startswith("contracts/")
+                      and "." not in path.split("/")
+                      and path.endswith((".md", ".json")), "manifest")
+                item = require_mapping_keys(manifest_path, metadata, {"algorithm", "sha256"}, "manifest 欄位")
+                if item is not None:
+                    check(manifest_path, item.get("algorithm") == "sha256" and sha(item.get("sha256")), "manifest")
         derived = manifest.get("derived_tasks")
         check(manifest_path, isinstance(derived, list), "manifest")
         seen_tasks: set[str] = set()
@@ -744,26 +763,44 @@ def validate_plan_package_json() -> None:
             if manifest.get("commit_policy") in ("none", "task-local-commits"):
                 check(execution_path, execution.get("final_commit_sha") is None, "execution")
 
-        def observed_time(value: object) -> bool:
-            return value not in (None, time_placeholder) and timestamp(value)
-
         if execution.get("status") == "not_started":
             check(execution_path, execution.get("started_at") is None and execution.get("finished_at") is None, "execution")
+            check(execution_path, execution.get("base_commit_sha") is None
+                  and execution.get("final_commit_sha") is None
+                  and execution.get("final_diff_review") == "not_run", "execution")
         else:
             check(execution_path, observed_time(execution.get("started_at")) and execution.get("base_commit_sha") is not None, "execution")
-            if manifest is not None:
-                allowed_manifest_states = ("approved", "superseded") if execution.get("status") == "superseded" else ("approved",)
-                check(execution_path, manifest.get("status") in allowed_manifest_states and observed_time(manifest.get("finalized_at")), "execution")
+            check(execution_path, relative_path(worktree), "execution")
             check(execution_path, sha(execution.get("manifest_sha256")) and execution.get("manifest_sha256") != sha_placeholder, "execution")
+            for field in ("plan_package_id", "execution_id"):
+                check(execution_path, text_value(execution.get(field)), "execution")
+            if manifest is not None:
+                # Superseded packages remain readable as history, not execution authority.
+                check(execution_path, manifest.get("status") in ("approved", "superseded")
+                      and observed_time(manifest.get("approved_at"))
+                      and observed_time(manifest.get("finalized_at")), "execution")
+                check(execution_path, text_value(manifest.get("approval_record")), "execution")
+                for field, choices in (
+                    ("execution_mode", ("inline", "executing-plans", "subagent-driven-development", "provider")),
+                    ("worktree_policy", ("current-checkout", "isolated-worktree")),
+                    ("commit_policy", ("none", "task-local-commits", "final-local-commit")),
+                ):
+                    check(execution_path, enum(manifest.get(field), choices), "execution")
+                for field in ("files", "contract_files"):
+                    entries = manifest.get(field, {})
+                    check(execution_path, isinstance(entries, dict) and all(
+                        isinstance(metadata, dict) and sha(metadata.get("sha256"))
+                        and metadata.get("sha256") != sha_placeholder
+                        for metadata in entries.values()
+                    ), "execution")
         if execution.get("finished_at") is not None:
             check(execution_path, observed_time(execution.get("finished_at")), "execution")
-        if observed_time(execution.get("started_at")) and observed_time(execution.get("finished_at")):
-            check(execution_path, datetime.fromisoformat(execution["finished_at"].replace("Z", "+00:00")) >= datetime.fromisoformat(execution["started_at"].replace("Z", "+00:00")), "execution")
+        if manifest is not None:
+            check_time_order(execution_path, manifest.get("finalized_at"), execution.get("started_at"), "execution")
+        check_time_order(execution_path, execution.get("started_at"), execution.get("finished_at"), "execution")
 
         command_run_ids: set[str] = set()
-        successful_run_ids: set[str] = set()
         test_run_ids: list[str] = []
-        passed_test_run_ids: list[str] = []
 
         def latest_tests_passed(items: object) -> bool:
             if not isinstance(items, list) or not items:
@@ -773,17 +810,17 @@ def validate_plan_package_json() -> None:
                 if not isinstance(item, dict) or not isinstance(item.get("test_id"), str):
                     return False
                 latest[item["test_id"]] = item
-            return all(
-                item.get("status") == "passed"
-                and isinstance(item.get("run_id"), str)
-                and item["run_id"] in successful_run_ids
-                for item in latest.values()
-            )
+            return all(item.get("status") == "passed" for item in latest.values())
+
+        def observation_passed(item: dict) -> bool:
+            if item.get("kind", "command") == "manual":
+                return item.get("result") == "passed" and item.get("exit_code") is None and text_value(item.get("evidence"))
+            return item.get("result") != "not_run" and item.get("exit_code") == 0
 
         def latest_cumulative_passed(items: object) -> bool:
             if not isinstance(items, list) or not items:
                 return False
-            latest: dict[tuple[str, str, str], dict] = {}
+            latest: dict[tuple[str, str, str, str], dict] = {}
             for item in items:
                 if not isinstance(item, dict) or item.get("result") == "not_run":
                     return False
@@ -792,16 +829,20 @@ def validate_plan_package_json() -> None:
                     return False
                 if planned is not None and not isinstance(planned, str):
                     return False
-                key = ("planned", planned, workdir) if planned is not None else ("actual", actual, workdir)
+                kind = item.get("kind", "command")
+                if not isinstance(kind, str):
+                    return False
+                key = (kind, "planned", planned, workdir) if planned is not None else (kind, "actual", actual, workdir)
                 latest[key] = item
-            return all(item.get("exit_code") == 0 for item in latest.values())
+            return all(observation_passed(item) for item in latest.values())
 
-        def commands(items: object) -> None:
+        def commands(items: object, *, allow_observed: bool = True) -> None:
             check(execution_path, isinstance(items, list), "execution")
             if not isinstance(items, list):
                 return
             for command in items:
-                record = require_mapping_keys(execution_path, command, {"run_id", "planned_run_id", "workdir", "actual", "recorded_at", "exit_code", "result"}, "execution 欄位")
+                is_manual = isinstance(command, dict) and command.get("kind") == "manual"
+                record = require_mapping_keys(execution_path, command, {"run_id", "planned_run_id", "workdir", "actual", "recorded_at", "exit_code", "result"}, "execution 欄位", optional={"kind", "evidence"} if is_manual else {"kind"})
                 if record is None:
                     continue
                 check(execution_path, identifier(record.get("run_id"), "RUN"), "execution")
@@ -809,21 +850,26 @@ def validate_plan_package_json() -> None:
                 if isinstance(run_id, str):
                     check(execution_path, run_id not in command_run_ids, "execution")
                     command_run_ids.add(run_id)
-                    if record.get("exit_code") == 0 and record.get("result") != "not_run":
-                        successful_run_ids.add(run_id)
                 check(execution_path, record.get("planned_run_id") is None or identifier(record.get("planned_run_id"), "RUN"), "execution")
                 workdir = record.get("workdir")
-                check(execution_path, relative_path(workdir) or workdir == "{{INPUT:repository-relative-path}}", "execution")
+                check(execution_path, relative_path(workdir) or (
+                    record.get("result") == "not_run" and workdir == "{{INPUT:repository-relative-path}}"
+                ), "execution")
                 check(execution_path, timestamp(record.get("recorded_at")), "execution")
                 check(execution_path, text_value(record.get("result")), "execution")
+                if not allow_observed:
+                    check(execution_path, record.get("result") == "not_run", "execution")
+                check(execution_path, enum(record.get("kind", "command"), ("command", "manual")), "execution")
+                if is_manual:
+                    check(execution_path, record.get("exit_code") is None and enum(record.get("result"), ("not_run", "passed", "failed", "blocked")), "execution")
+                    check(execution_path, record.get("evidence") is None if record.get("result") == "not_run" else text_value(record.get("evidence")), "execution")
                 if record.get("result") == "not_run":
                     check(execution_path, all(record.get(key) is None for key in ("actual", "recorded_at", "exit_code")), "execution")
                 else:
-                    check(execution_path, text_value(record.get("actual")) and type(record.get("exit_code")) is int and record.get("recorded_at") not in (None, time_placeholder), "execution")
+                    check(execution_path, text_value(record.get("actual")) and (is_manual or type(record.get("exit_code")) is int) and record.get("recorded_at") not in (None, time_placeholder), "execution")
 
         tasks = execution.get("tasks")
         execution_task_ids: set[str] = set()
-        completed_task_tests: list[object] = []
         if not isinstance(tasks, list) or not tasks:
             add_error(execution_path, "execution 欄位")
         else:
@@ -848,9 +894,18 @@ def validate_plan_package_json() -> None:
                     check(execution_path, item.get("commit_sha") is None, "execution")
                 if execution.get("status") == "not_started":
                     check(execution_path, item.get("status") == "not_started", "execution")
+                if item.get("status") == "not_started":
+                    check(execution_path, item.get("changed_files") == []
+                          and item.get("diff_review") == "not_run"
+                          and item.get("commit_sha") is None, "execution")
                 changed = item.get("changed_files")
                 check(execution_path, isinstance(changed, list) and all(relative_path(path) for path in changed), "execution")
-                commands(item.get("commands"))
+                commands(item.get("commands"), allow_observed=item.get("status") != "not_started")
+                task_commands = item.get("commands")
+                task_observations = {
+                    record.get("run_id"): record for record in task_commands
+                    if isinstance(record, dict) and isinstance(record.get("run_id"), str)
+                } if isinstance(task_commands, list) else {}
                 tests = item.get("tests")
                 check(execution_path, isinstance(tests, list), "execution")
                 if isinstance(tests, list):
@@ -858,11 +913,15 @@ def validate_plan_package_json() -> None:
                         record = require_mapping_keys(execution_path, test, {"test_id", "run_id", "actual", "recorded_at", "evidence", "status"}, "execution 欄位")
                         if record is None:
                             continue
+                        if item.get("status") == "not_started":
+                            check(execution_path, record.get("status") == "not_run", "execution")
                         check(execution_path, identifier(record.get("test_id"), "T") and identifier(record.get("run_id"), "RUN"), "execution")
                         if isinstance(record.get("run_id"), str):
                             test_run_ids.append(record["run_id"])
-                            if record.get("status") == "passed":
-                                passed_test_run_ids.append(record["run_id"])
+                        observation = task_observations.get(record.get("run_id")) if isinstance(record.get("run_id"), str) else None
+                        check(execution_path, observation is not None, "execution")
+                        if record.get("status") == "passed":
+                            check(execution_path, observation is not None and observation_passed(observation), "execution")
                         check(execution_path, enum(record.get("status"), ("not_run", "passed", "failed", "blocked", "skipped")), "execution")
                         check(execution_path, timestamp(record.get("recorded_at")), "execution")
                         if record.get("status") == "not_run":
@@ -873,16 +932,13 @@ def validate_plan_package_json() -> None:
                     if manifest is not None and manifest.get("commit_policy") == "task-local-commits":
                         check(execution_path, item.get("commit_sha") is not None and commit(item.get("commit_sha")), "execution")
                     check(execution_path, item.get("diff_review") == "passed", "execution")
-                    completed_task_tests.append(tests)
+                    check(execution_path, latest_tests_passed(tests), "execution")
                     command_records = item.get("commands")
                     check(execution_path, isinstance(command_records, list) and bool(command_records) and all(isinstance(command, dict) and command.get("result") != "not_run" for command in command_records), "execution")
                     if isinstance(command_records, list) and command_records and isinstance(command_records[-1], dict):
-                        check(execution_path, command_records[-1].get("exit_code") == 0, "execution")
-        commands(execution.get("cumulative_verification"))
+                        check(execution_path, observation_passed(command_records[-1]), "execution")
+        commands(execution.get("cumulative_verification"), allow_observed=execution.get("status") != "not_started")
         check(execution_path, all(run_id in command_run_ids for run_id in test_run_ids), "execution")
-        check(execution_path, all(run_id in successful_run_ids for run_id in passed_test_run_ids), "execution")
-        for tests in completed_task_tests:
-            check(execution_path, latest_tests_passed(tests), "execution")
         deviations = execution.get("deviations")
         check(execution_path, isinstance(deviations, list), "execution")
         if isinstance(deviations, list):
