@@ -48,7 +48,7 @@ class DocumentStructureContractTest(unittest.TestCase):
             "測試資料與情境",
             "自動化與執行",
             "回歸與交付",
-            "實施結果與剩餘風險",
+            "執行證據與未覆蓋風險",
         ):
             self.assertIn(expected, guide)
 
@@ -101,14 +101,17 @@ class DocumentStructureContractTest(unittest.TestCase):
         """文件核准與執行進度不得再共用一個含混狀態。"""
         plan = self.read("assets/requirement-plan-template.md")
         test_design = self.read("assets/test-design-template.md")
+        execution = self.read("assets/execution-template.json")
         plan_guide = self.read("references/requirement-plan.md")
         test_guide = self.read("references/test-design.md")
         for expected in ("計畫狀態", "交付狀態"):
             self.assertIn(expected, plan)
             self.assertIn(expected, plan_guide)
-        for expected in ("設計狀態", "執行狀態"):
-            self.assertIn(expected, test_design)
-            self.assertIn(expected, test_guide)
+        self.assertIn("設計狀態", test_design)
+        self.assertIn("設計狀態", test_guide)
+        self.assertNotIn("執行狀態：", test_design)
+        self.assertIn('"status"', execution)
+        self.assertIn("execution.json", test_guide)
 
     def test_plan_and_test_design_share_stable_traceability_ids(self) -> None:
         """驗收、切片、情境、資料與執行應以穩定 ID 串接。"""
@@ -119,10 +122,11 @@ class DocumentStructureContractTest(unittest.TestCase):
         for expected in ("AC-01", "T-01", "D-01", "RUN-01"):
             self.assertIn(expected, test_design)
 
-    def test_test_design_uniquely_owns_commands_and_detailed_results(self) -> None:
-        """需求計畫只保留驗證關卡，具體命令與逐情境結果由測試設計擁有。"""
+    def test_test_design_owns_commands_while_execution_owns_observed_results(self) -> None:
+        """測試設計擁有命令與預期，實際結果只由 execution.json 擁有。"""
         plan = self.read("assets/requirement-plan-template.md")
         test_design = self.read("assets/test-design-template.md")
+        execution = self.read("assets/execution-template.json")
         guide = self.read("references/requirement-plan.md")
         self.assertNotIn("指令或方式", plan)
         self.assertNotIn("可重現指令", plan)
@@ -130,6 +134,9 @@ class DocumentStructureContractTest(unittest.TestCase):
         self.assertIn("可重現命令或驗證方式", test_design)
         self.assertIn("詳細測試情境", guide)
         self.assertIn("只放在獨立 test-design", guide)
+        self.assertIn("## 執行證據索引", test_design)
+        self.assertNotIn("## 自動化測試實施結果", test_design)
+        self.assertIn('"actual"', execution)
 
     def test_provider_bridge_is_compact_natively_but_preserves_external_ownership(self) -> None:
         """原生模式應精簡；外部正式產物仍保留完整橋接與所有權。"""
@@ -140,10 +147,24 @@ class DocumentStructureContractTest(unittest.TestCase):
         for content in (plan, test_design):
             self.assertIn("原生模式", content)
             self.assertIn("外部 Provider 映射（條件式", content)
+            self.assertIn("需求級工作流所有者", content)
+            self.assertIn("階段能力執行者", content)
             self.assertIn("唯一可寫所有者", content)
         self.assertIn("只有存在活動外部產物時才展開橋接映射", guide)
         for expected in ("Matt Pocock Skills", "`to-spec`", "`to-tickets`"):
             self.assertIn(expected, integration)
+
+    def test_orchestration_does_not_add_persistent_plan_structure_by_default(
+        self,
+    ) -> None:
+        """內部能力匹配不得讓每份需求計畫增加常駐編排欄位。"""
+        plan = self.read("assets/requirement-plan-template.md")
+        orchestration = self.read("references/skill-orchestration.md")
+        for internal in ("階段能力快照", "候選排名", "淘汰候選"):
+            self.assertNotIn(internal, plan)
+        self.assertNotIn("跨任務 Skill 交接", plan)
+        self.assertIn("使用者關切門檻", orchestration)
+        self.assertIn("不得為保存這些資訊新增常駐計畫章節或預設欄位", orchestration)
 
     def test_ai_effectiveness_remains_separate_from_delivery_results(self) -> None:
         """AI 成效不得混入一般實作與驗證結果。"""
