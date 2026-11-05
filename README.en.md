@@ -2,13 +2,13 @@
 
 English | [繁體中文](README.md)
 
-An open-source Agent Skill for Codex and Claude Code that provides a verifiable workflow for requirement planning, test design, Git diff review, and end-to-end implementation.
+An open-source Agent Skill for Codex and Claude Code, focused on executable requirement plans, test design, and delivery consistency reviews. It can also coordinate end-to-end implementation and verification under an approved plan.
 
 ## Technology and Compatibility
 
 - Skill format: Agent Skills (`SKILL.md`)
 - Supported tools: Codex and Claude Code
-- Documentation formats: Markdown and YAML
+- Documentation formats: Markdown, JSON, JSON Schema, and YAML
 - Publication validation: Bash and the Python 3 standard library
 - Version control and review: Git
 
@@ -17,51 +17,81 @@ An open-source Agent Skill for Codex and Claude Code that provides a verifiable 
 - **Requirement planning**: Define goals, boundaries, impact, reuse, risks, implementation slices, and acceptance criteria. Existing relevant domain context and ADRs are read when present, but never created just to satisfy the workflow.
 - **Test design**: Cover applicable success, boundary, failure, and regression scenarios, then map them to automated and manual verification.
 - **Git diff review**: Independently inspect Spec/scope compliance and Standards/engineering quality, then verify and deduplicate findings into stable `REV-*` IDs with high, medium, or low severity.
-- **Full workflow**: Plan, design tests, implement after approval, verify, update documentation, and review the final diff.
+- **Full workflow**: Complete the plan, test design, and applicable interface contract; approve the package; then implement, verify, record execution evidence, and review the complete diff.
 
 AI collaboration metrics and local timing are disabled by default. They are enabled only when the user explicitly asks for them or the target repository requires them.
 
-## External Workflow Integration
+## Full Workflow
 
-- The four modes remain a complete native path. External capabilities are evaluated during requirement planning, test design, implementation, verification and repair, documentation sync, and Git diff review only after the user enters a mode or explicitly requests cross-Skill delivery coordination.
-- Capabilities have two inputs. Proactive discovery reads only the Skill catalog metadata provided by the platform for the current task. An explicit invocation context accepts a capability the user has already invoked through the platform without rediscovering, ranking, or invoking it again. Discovery is not activation, and neither input scans local Skills or treats installation state, brands, or names as capability evidence.
-- With zero, one, or multiple capabilities pending verification, the fast path falls back immediately, avoids a fake comparison, or expands only the current highest-priority group. Metadata filtering does not itself create a candidate; authorization, side effects, ownership, mandatory contracts, and verifiable value remain required on every path.
-- Candidates must pass availability, invocation-mode, authorization, side-effect, artifact-ownership, and mandatory-contract gates before verifiable value and a consistent priority order can select one. The native workflow remains silent and complete when none qualify.
-- Model-invoked capabilities follow the platform contract. A User-invoked capability produces one currently executable handoff action and pauses; the returned artifact is revalidated before work resumes. The README does not maintain a static third-party command catalog.
-- Each requirement has at most one requirement-level workflow owner. Stage capability executors fill independent slots without taking unrelated artifact ownership, and every formal artifact keeps one writable owner.
-- The cross-provider composition rule permits only non-overlapping capability slots or an explicit upstream/downstream relationship. One primary executor owns each slot or indivisible bundle, and every cross-provider edge requires a lightweight artifact handoff contract.
-- An approved plan is not sent to a ticket generator by default. Task-ordering handoff is useful only when long-lived tracking, complex collaboration, or an external tracker adds verifiable value.
-- Orchestration details are shown or persisted only when the user must act, grant additional authorization, resolve an artifact conflict, or safely resume across tasks. Internal snapshots, rankings, and rejected candidates do not become plan fields.
-- When one external workflow safely and completely covers the request, this Skill exits extra orchestration. Failures degrade according to actual side effects and are never reported as provider success.
-- The integration never installs, sets up, initializes, commits, archives, deletes, performs remote writes, or publishes without explicit authorization.
+This diagram covers full delivery. A request for planning, test design, or Git diff review alone runs only that selected mode.
 
-For Matt Pocock Skills, installation alone does not create a candidate. Existing `to-spec` or `to-tickets` artifacts may retain their approved ownership, while `to-tickets` remains conditional and User-invoked. A workflow such as `implement` that may create a commit is ineligible unless the approved plan package explicitly grants a compatible local `commit_policy` or the user grants commit authorization separately.
+```mermaid
+flowchart TD
+    A["Confirm requirements, scope and acceptance"] --> B["Draft plan and test design<br/>Locate interface contracts when applicable"]
+    B --> C["Approve package and verify identity"]
+    C --> D["Execute implementation.md"]
+    D --> E["Verify and record execution.json"]
+    E --> F{"Acceptance and complete diff review pass?"}
+    F -->|Yes| G["Deliver results and evidence"]
+    F -->|Repair using the approved approach| D
+    F -->|Plan change: new package and approval| B
+```
+
+Missing approval or required input blocks execution. Approved formal documents remain immutable; results belong in `execution.json`. Changes to scope, interfaces, or implementation steps require a new package and approval. See the [plan-package contract](skills/ai-development-workflow/references/plan-package.md) for identity, workspace isolation, and recovery rules.
 
 ## Requirement Planning Features
 
-- Every new requirement gets a `docs/plans/YYYY-MM-DD-<topic>/` package. `design.md`, `delivery.md`, `implementation.md`, `test-design.md`, `manifest.json`, and `execution.json` have separate ownership; legacy flat plans are read-only compatibility inputs and are never moved or deleted automatically.
-- For interface changes, reuse the authoritative contract. Only when none exists, add conditional `contracts/` request/response schemas with Chinese field titles/descriptions, typed examples and applicable Apifox mock rules. The same contract drives structural and behavioral acceptance of the real implementation. No interface change means no empty contract files; this does not start a mock service or API platform.
-- `implementation.md` is the single execution entry point. Superpowers `executing-plans` or `subagent-driven-development` can consume it without format conversion after passing the [compatibility matrix](skills/ai-development-workflow/references/plan-package.md#superpowers-相容性矩陣).
-- An external approval record binds the four formal Markdown SHA-256 hashes, source revision, execution ID, and execution, worktree, and local commit policies. After optional task derivation, finalize `manifest.json` and record its single-execution receipt. Approved documents stay immutable and the latest external state controls their validity; `execution.json` owns observed commands, tests, task status, and commit SHAs.
-- `docs/plans/` remains Git-ignored and must not be committed. Isolated-worktree materialization copies only the manifest allowlist to the same relative path and revalidates it before copying, after copying, and before execution. Push, PR, merge, release, publish, deployment, and other remote writes always require separate authorization.
-- `tasks/` is absent by default. It is derived from the approved `implementation.md` only for parallel, cross-session, cross-repository, or high-risk isolation work, and each task binds its parent SHA, task ID, acceptance criteria, dependencies, and allowed files.
-- Investigates discoverable facts before asking questions, then confirms only decisions that can change scope, contracts, architecture, test seams, or acceptance criteria.
-- Reads existing relevant domain context, context maps, and ADRs on demand, verifies them against current code, and does not create extra decision documents merely to fill a format.
-- Adds user-observable behavior and acceptance scenarios only when they help define the requirement; it does not generate long user-story lists to fill a template.
-- Uses a compact profile for small single-repository work without external artifacts or high-spread risk. The legacy six core plan headings are historical reading guidance; new packages distribute content by artifact ownership and may use five core test-design headings. Complex work expands the field catalog only when needed.
-- Connects acceptance, slices, scenarios, data, and execution through `AC-* → S-* → T-* → D-* / RUN-*`. Planned commands belong to the test design; observed commands and per-scenario results belong only to `execution.json`.
-- Chooses the highest stable user-observable public interface as the preferred test seam. If an existing lower-level test cannot verify the visible contract, a new test may be added at that public interface with approval.
-- Organizes work into independently verifiable vertical slices with blockers and completion criteria. Wide refactors use `expand → migrate → contract` with an integration gate.
+Each new requirement uses `docs/plans/YYYY-MM-DD-<topic>/`:
+
+```text
+docs/plans/YYYY-MM-DD-<topic>/
+├── design.md
+├── delivery.md
+├── implementation.md
+├── test-design.md
+├── manifest.json
+├── execution.json
+├── contracts/                 # Conditional interface artifacts
+│   ├── api.md
+│   ├── operation.request.schema.json
+│   └── operation.response.schema.json
+└── tasks/                     # Conditional approved-plan projections
+    └── S-01.md
+```
+
+| Artifact | Purpose |
+| --- | --- |
+| `design.md` | Background, selected approach, architecture, data flow, and interfaces |
+| `delivery.md` | Scope, current evidence, `AC-*`, and acceptance criteria |
+| `implementation.md` | Exact files, steps, commands, expected results, and dependencies; the execution entry point |
+| `test-design.md` | Test matrix, data, assertions, and planned `RUN-*` verification methods |
+| `manifest.json` | Approval identity, formal-file SHA-256 hashes, and execution policies |
+| `execution.json` | Actual status, commands, automated/manual evidence, deviations, and results |
+
+- `contracts/`: create it only for interface changes without an existing authoritative source. Otherwise retain an exact source/version reference. Schemas provide Chinese field titles/descriptions, typed examples, and applicable Apifox mock rules; the same contract drives implementation acceptance. See [interface contracts and acceptance](skills/ai-development-workflow/references/api-contract.md).
+- `tasks/`: absent by default; derive it from the approved plan only when parallel, cross-session, cross-repository, or high-risk isolation work needs it.
+- `docs/plans/` is Git-ignored and must not be committed. Legacy flat plans are read-only inputs, never moved or deleted automatically; execution requires a new approved package.
+- Keep small requests compact. Legacy documents retain the six core plan headings as historical reading guidance; new packages separate artifact responsibilities, and eligible small test designs can use five core test-design headings.
+- Trace acceptance, Tasks, cases, data, and verification with `AC-* → S-* → T-* → D-* / RUN-*`. See [requirement planning](skills/ai-development-workflow/references/requirement-plan.md) and [test design](skills/ai-development-workflow/references/test-design.md).
+
+## External Workflow Integration
+
+- Proactive discovery accepts only the current platform catalog metadata; an explicit invocation context retains the capability already invoked in the task. Discovery is not activation and does not scan installed Skills.
+- With zero, one, or multiple capabilities pending verification, expand only the necessary contracts. Metadata filtering does not itself create a candidate: availability, authorization, side effects, ownership, and verifiable value must pass. Use the native workflow when none qualify.
+- Model-invoked capabilities follow the platform contract. User-invoked capabilities provide one currently executable handoff action and pause, then revalidate the return. Show necessary handoff information only when the user must act, authorize, resolve a conflict, or safely resume across tasks.
+- The cross-provider composition rule requires non-overlapping slots or an explicit upstream/downstream relationship and an artifact handoff contract. Formal artifacts keep one writable owner. A sufficient plan is not sent to a ticket generator by default; exit extra orchestration when one workflow already covers the request.
+- The integration never installs, sets up, initializes, commits, archives, deletes, performs remote writes, or publishes automatically. Local commits follow the approved policy; push, PR, merge, release, deployment, and other remote writes still need separate authorization.
+
+Superpowers can read `implementation.md` and execute the approved mode after passing the [compatibility matrix](skills/ai-development-workflow/references/plan-package.md#superpowers-相容性矩陣). Detailed rules live in [Skill orchestration](skills/ai-development-workflow/references/skill-orchestration.md) and [Provider integration](skills/ai-development-workflow/references/workflow-integration.md).
 
 ## Reference Timing and Productivity
 
-- Timing is opt-in and records only time; it never collects, estimates, or reports token usage.
-- It uses short Python 3 standard-library commands and local session state, without a background service or cloud upload.
-- A pre-implementation PERT baseline may cover the full requirement or, when timing is enabled late but before implementation, the next not-yet-started delivery phases. Excluded phases use `0/0/0`, and a remaining-scope result must not be presented as whole-requirement productivity.
-- Time savings are calculated only when the declared scope has complete measured coverage and a matching baseline. Reports label the formula as a reference time-saving percentage; partial or unknown coverage reports measured time and anomalies without inventing a percentage.
-- When an approved V2 or V3 scope is added after completion in the same conversation, it receives an independent measurement segment. Completed state is not resumed, and segments are not manually merged.
-- A new conversation does not search for, resume, or merge previous measurements.
-- ActivityWatch can be used only when already installed and explicitly selected. Failures fall back to session timing.
+- Metrics and timing are disabled by default; enable them only on explicit request or repository policy.
+- The optional Python 3 standard-library helper records closed intervals locally, pauses for user/CI waits, and uses no background service or upload. Missing Python disables timing while the core workflow continues.
+- Lock the corresponding PERT baseline before implementation. Only complete, comparable coverage produces a reference time-saving percentage; report partial or unknown coverage without turning it into whole-requirement savings.
+- Measure time only; never collect, estimate, or report token usage. Added scope uses independent segments, and a new conversation does not resume old measurements.
+
+Commands, optional ActivityWatch use, and evidence recording are defined in the [reference timing guide](skills/ai-development-workflow/references/reference-timing.md).
 
 ## Installation
 
@@ -111,17 +141,17 @@ cp -R skills/ai-development-workflow ~/.claude/skills/ai-development-workflow
 ## Usage Examples
 
 - “Create a requirement plan for this change, but do not implement it yet.”
-- “Create a test design from the approved plan, including test data and regression scope.”
+- “Create a test design from the current design and delivery criteria, including test data and regression scope, then submit the complete package for approval.”
 - “Review the complete Git diff against the target branch.”
 - “Use the full workflow for this request. If the current platform provides a collaboration Skill with verifiable value, give me one explicit handoff only when I need to act or authorize it.”
 - “Complete this feature using the full workflow, and pause for plan approval, required user actions, additional authorization, or conflict resolution.”
 
 ## Updating
 
-For a project-level installation:
+From the project root, update only the project-level installation:
 
 ```bash
-npx skills update ai-development-workflow
+npx skills update ai-development-workflow -p
 ```
 
 For a global installation:
@@ -138,11 +168,14 @@ Open a new conversation after updating.
 python3 -m unittest discover -s tests -p "test_*.py" -v
 bash tests/test-validate-publication.sh
 bash scripts/validate-publication.sh
+git diff --check
 ```
 
 In repository mode, the validator checks the public working tree while excluding `.git`, `.idea`, and the explicitly Git-ignored process-artifact directories `docs/plans/` and `docs/specs/`. Similar public directories remain in scope. It validates the Skill structure, metadata, timing script, relative Markdown links, required template fields, Traditional Chinese repository documents, and likely sensitive information, reporting only file paths, rules, and necessary line numbers without echoing matched content.
 
 The Skill's interaction language follows the user. Generated files and code follow the target repository's rules and nearby conventions. The Traditional Chinese publication check protects this repository's public Chinese documents and does not impose that language on target repositories.
+
+These checks validate public documents, templates, and validator behavior. Real interfaces, Provider calls, external approval, and workspace isolation need evidence from the corresponding task. Valid Schema examples or mocks do not establish acceptance of the real implementation.
 
 ## Security and Privacy
 
