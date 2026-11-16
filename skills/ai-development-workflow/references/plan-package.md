@@ -111,6 +111,12 @@ docs/plans/YYYY-MM-DD-<topic>/
 
 每個 commands 項目固定包含 `run_id`、`planned_run_id`、`workdir`、`actual`、`recorded_at`、`exit_code`、`result`；每個 tests 項目包含 `test_id`、`run_id`、`actual`、`recorded_at`、`evidence`、`status`。`run_id` 是單次觀測的唯一 ID，在全部 Task commands 與 cumulative_verification 中不得重複；RED、GREEN、重試或再次累計驗證分配不同 run_id，`planned_run_id` 指回測試設計的原始 RUN ID（非測試操作為 null）。test.run_id 必須引用同一 Task 內存在的觀測 run_id，不能懸空或用 planned_run_id 代替觀測。尚未執行的觀測值為 `null`，不得保留生成占位符。`cumulative_verification` 使用相同 commands 結構；`final_commit_sha` 記錄 final-local-commit 的 SHA，逐 Task SHA 留在該 Task。commit 成功後才讀取 Git SHA 並回填。`deviations` 每項記錄 `task_id`、`original_step`、`new_fact`、`impact`、`requires_reapproval` 與 `resolution`。JSON 只接受固定 schema 欄位；唯一可選頂層欄位 `ai_collaboration` 為字串陣列，保存已明確啟用的計量摘要與證據索引。觀測的可選欄位見下節；狀態值與型別依 JSON 範本及發布檢查的 schema 約束。
 
+### 收尾與等待測試前對帳
+
+收尾、交接或回報「等待測試／聯調」前，唯一寫入者將最新可核對證據與 execution 的 Task、外部依賴、累計驗證及 `remaining_risks` 對帳。已解除的依賴不再寫成待交付；已執行的受控批次如實記錄環境、結果與證據，未執行的驗證仍保留。觀測依既有 schema 回填，不新增等待測試狀態值、第二份進度文件或回填到核准文件；尚未取得的證據列為缺口。
+
+交付說明分清實作、測試／聯調、API 受理、裝置效果與正式上線的實際狀態。等待測試不代表驗收或 completed；API 受理不代表裝置效果已確認。manifest 或外部核准證據不完整時，如實揭露身份缺口，按既有核准規則處理後續執行，不把觀測回填當成核准，也不補造歷史核准或收據。
+
 ### 自動化與人工觀測
 
 `commands` 保留既有欄位與名稱，承載實際命令或人工驗證觀測。可選 `kind` 為 `command`（省略時同義，既有 v1 紀錄不用轉換）或 `manual`，不新增頂層集合。自動化觀測保持真實命令和整數 exit_code；不得為已執行命令填 null。
