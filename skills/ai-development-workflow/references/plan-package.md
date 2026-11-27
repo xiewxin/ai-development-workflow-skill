@@ -55,6 +55,7 @@ docs/plans/YYYY-MM-DD-<topic>/
 - 程式碼步驟提供完整可用內容，不使用 `TBD`、`TODO`、省略號或「同前」。
 - 每個命令附精確工作目錄、命令及 Expected；Expected 必須能判定成功或正確的 RED 失敗。
 - 每個 Task 列出 Interfaces、Dependencies、allowed files，以及 `AC-*／S-*／T-*` 映射。
+- 把目標倉庫已確認且適用的分層與命名限制寫入對應 Task，列明適用的檔案或符號及可從 Diff 判定的條件。在該 Task 的第一次 Diff 審查逐項核對。
 - 每個 Task 首次寫入前記錄 HEAD 及 staged／unstaged／untracked 清單；Task Diff review 分別檢查這三種狀態，實際讀取新增檔案，並對照 Task 起始基線歸屬變更，不能把空的 unstaged diff 當作審查通過。
 - 依 TDD 排列 RED → 驗證正確失敗 → GREEN → 驗證通過 → refactor；每個 Task 結束前審查該 Task Diff。
 - 最後執行完整累計驗證、完整 Diff 範圍對帳與最終審查。

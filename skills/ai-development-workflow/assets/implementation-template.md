@@ -110,7 +110,7 @@ Expected: PASS with the same observable behavior.
 
 Run: `git status --short --untracked-files=all && git diff -- {{INPUT:space-separated allowed files}} && git diff --cached -- {{INPUT:space-separated allowed files}}`
 
-Expected: only this Task's allowed files changed; every hunk maps to `S-01`, `AC-01`, or `T-01`; no secrets or unrelated edits. Compare against the recorded Task-start HEAD and inventory, including any already committed Task changes on resume. Read each new untracked allowed file in full, since neither diff command shows it; do not stage files merely to make them visible. Preserve pre-existing unrelated changes and stop if attribution is unclear. Record review passed only after staged, unstaged and new-file content have all been inspected.
+Expected: only this Task's allowed files changed; every hunk maps to `S-01`, `AC-01`, or `T-01`; no secrets or unrelated edits. Compare against the recorded Task-start HEAD and inventory, including any already committed Task changes on resume. Read each new untracked allowed file in full, since neither diff command shows it; do not stage files merely to make them visible. Preserve pre-existing unrelated changes and stop if attribution is unclear. Verify each layering and naming constraint stated for this Task. Record review passed only after staged, unstaged and new-file content have all been inspected.
 
 - [ ] **Step 7: Record task evidence, optionally commit, then bind the commit**
 
